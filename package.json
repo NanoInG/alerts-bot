@@ -1,0 +1,23 @@
+{
+  "name": "alerts-bot",
+  "version": "1.0.0",
+  "description": "notify from red alert",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "server": "node server.js",
+    "bot": "node bot.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "form-data": "^4.0.5",
+    "mysql2": "^3.16.0",
+    "node-cron": "^3.0.3",
+    "node-fetch": "^3.3.2",
+    "node-telegram-bot-api": "^0.67.0"
+  }
+}

@@ -1,0 +1,802 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Історія тривог</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #09090b;
+            --surface: #18181b;
+            --border: #27272a;
+            --border-hover: #3f3f46;
+            --text: #fafafa;
+            --text-dim: #a1a1aa;
+            --text-muted: #71717a;
+            --accent: #3b82f6;
+            --accent-dim: rgba(59, 130, 246, 0.15);
+            --danger: #ef4444;
+            --danger-dim: rgba(239, 68, 68, 0.12);
+            --success: #22c55e;
+            --success-dim: rgba(34, 197, 94, 0.12);
+            --warning: #eab308;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 48px 32px;
+        }
+
+        header {
+            margin-bottom: 48px;
+        }
+
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .stats-row {
+            display: flex;
+            gap: 24px;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-dim);
+        }
+
+        .stat-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .stat-dot.total {
+            background: var(--warning);
+        }
+
+        .stat-dot.alert {
+            background: var(--danger);
+        }
+
+        .stat-dot.end {
+            background: var(--success);
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .filters {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 280px;
+            position: relative;
+        }
+
+        .search-box svg {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            width: 16px;
+            height: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px 10px 38px;
+            font-size: 14px;
+            color: var(--text);
+            transition: all 0.15s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-dim);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border);
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 4px;
+        }
+
+        .filter-btn {
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-btn:hover {
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .filter-btn.active {
+            background: var(--bg);
+            border-color: var(--border);
+            color: var(--text);
+        }
+
+        .filter-btn.active.alert {
+            background: var(--danger-dim);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--danger);
+        }
+
+        .filter-btn.active.end {
+            background: var(--success-dim);
+            border-color: rgba(34, 197, 94, 0.3);
+            color: var(--success);
+        }
+
+        .date-input {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            color: var(--text);
+            width: 180px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .date-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .reset-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .reset-btn:hover {
+            border-color: var(--border-hover);
+            color: var(--text);
+        }
+
+        .reset-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Cards */
+        .cards {
+            margin-top: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .card-pair {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            transition: all 0.2s;
+            overflow: hidden;
+        }
+
+        .card-pair:hover {
+            border-color: var(--border-hover);
+        }
+
+        .card-pair.expandable {
+            cursor: pointer;
+        }
+
+        .card-pair.expanded {
+            border-color: var(--accent);
+        }
+
+        .pair-main {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr auto;
+            gap: 16px;
+            align-items: center;
+            padding: 16px 20px;
+        }
+
+        .pair-left,
+        .pair-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pair-right {
+            justify-content: flex-end;
+            text-align: right;
+        }
+
+        .pair-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .pair-indicator.alert {
+            background: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+
+        .pair-indicator.end {
+            background: var(--success);
+        }
+
+        .pair-content {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .pair-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .pair-location {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .pair-time {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .pair-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 80px;
+        }
+
+        .pair-duration {
+            padding: 5px 12px;
+            background: rgba(234, 179, 8, 0.12);
+            border: 1px solid rgba(234, 179, 8, 0.25);
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--warning);
+            white-space: nowrap;
+        }
+
+        .pair-arrow {
+            font-size: 18px;
+            color: var(--text-muted);
+        }
+
+        .pair-empty {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .pair-status {
+            font-size: 13px;
+            color: var(--text-muted);
+            padding: 4px 10px;
+            background: var(--bg);
+            border-radius: 6px;
+        }
+
+        .pair-status.active {
+            color: var(--danger);
+            background: var(--danger-dim);
+        }
+
+        .pair-expand {
+            font-size: 12px;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+
+        .card-pair.expanded .pair-expand {
+            transform: rotate(180deg);
+        }
+
+        /* Expandable Details */
+        .pair-details {
+            display: none;
+            padding: 0 20px 16px;
+            border-top: 1px solid var(--border);
+            margin-top: -1px;
+        }
+
+        .card-pair.expanded .pair-details {
+            display: block;
+            padding-top: 16px;
+        }
+
+        .detail-row {
+            display: flex;
+            gap: 12px;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+
+        .detail-key {
+            color: var(--text-muted);
+            min-width: 120px;
+        }
+
+        .detail-val {
+            color: var(--text-dim);
+        }
+
+        .detail-val.threat {
+            color: var(--danger);
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .page-btn {
+            padding: 10px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--border-hover);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .empty {
+            text-align: center;
+            padding: 64px 32px;
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 64px 32px;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 24px 16px;
+            }
+
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+
+            .filters {
+                flex-wrap: wrap;
+            }
+
+            .search-box {
+                max-width: 100%;
+            }
+
+            .divider {
+                display: none;
+            }
+
+            .pair-main {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .pair-right {
+                justify-content: flex-start;
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <h1>Історія тривог</h1>
+                <div class="stats-row">
+                    <div class="stat">
+                        <div class="stat-dot total"></div><span class="stat-value" id="sTotal">0</span> всього
+                    </div>
+                    <div class="stat">
+                        <div class="stat-dot alert"></div><span class="stat-value" id="sAlerts">0</span> тривог
+                    </div>
+                    <div class="stat">
+                        <div class="stat-dot end"></div><span class="stat-value" id="sEnds">0</span> відбоїв
+                    </div>
+                </div>
+            </div>
+
+            <div class="filters">
+                <div class="search-box">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input type="text" class="search-input" id="search" placeholder="Пошук регіону...">
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="filter-group">
+                    <button class="filter-btn active" data-type="" onclick="setType(this)">Всі</button>
+                    <button class="filter-btn alert" data-type="ALERT" onclick="setType(this)">Тривоги</button>
+                    <button class="filter-btn end" data-type="END" onclick="setType(this)">Відбої</button>
+                </div>
+
+                <div class="divider"></div>
+
+                <input type="text" class="date-input" id="dateRange" placeholder="Оберіть дати..." readonly>
+
+                <button class="reset-btn" onclick="reset()" title="Скинути">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="cards" id="cards">
+            <div class="loading">
+                <div class="spinner"></div>
+                <div style="color: var(--text-muted)">Завантаження...</div>
+            </div>
+        </div>
+
+        <div class="pagination" id="pagination" style="display: none;">
+            <button class="page-btn" id="prev" onclick="page(-1)">← Назад</button>
+            <span class="page-info" id="pageInfo">1 / 1</span>
+            <button class="page-btn" id="next" onclick="page(1)">Далі →</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/uk.js"></script>
+    <script>
+        let p = 1, tp = 1, type = '', dateFrom = '', dateTo = '';
+
+        const fp = flatpickr('#dateRange', {
+            mode: 'range',
+            dateFormat: 'd.m.Y',
+            locale: 'uk',
+            allowInput: false,
+            onChange: function (dates) {
+                if (dates.length === 2) {
+                    // Use local date format, not UTC
+                    dateFrom = formatLocalDate(dates[0]);
+                    dateTo = formatLocalDate(dates[1]);
+                    p = 1;
+                    load();
+                } else if (dates.length === 0) {
+                    dateFrom = dateTo = '';
+                    load();
+                }
+            }
+        });
+
+        document.getElementById('search').addEventListener('input', debounce(load, 300));
+
+        function debounce(fn, ms) {
+            let t;
+            return function () { clearTimeout(t); t = setTimeout(fn, ms); };
+        }
+
+        function setType(el) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            type = el.dataset.type;
+            p = 1;
+            load();
+        }
+
+        function toggleCard(id) {
+            const card = document.getElementById(id)?.closest('.card-pair');
+            if (card) card.classList.toggle('expanded');
+        }
+
+        async function load() {
+            const cards = document.getElementById('cards');
+            cards.innerHTML = '<div class="loading"><div class="spinner"></div><div style="color: var(--text-muted)">Завантаження...</div></div>';
+
+            const q = new URLSearchParams({ page: 1, limit: 100 }); // fetch more for pairing
+            const s = document.getElementById('search').value;
+
+            if (s) q.append('search', s);
+            // Don't filter by type in API - we need both ALERT and END for pairing
+            if (dateFrom) q.append('dateFrom', dateFrom);
+            if (dateTo) q.append('dateTo', dateTo + ' 23:59:59');
+
+            try {
+                const r = await fetch('/api/history?' + q);
+                const { data = [], pagination = {}, stats = {} } = await r.json();
+
+                document.getElementById('sTotal').textContent = stats.total || 0;
+                document.getElementById('sAlerts').textContent = stats.alerts || 0;
+                document.getElementById('sEnds').textContent = stats.ends || 0;
+
+                if (!data.length) {
+                    cards.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>Немає записів</div>';
+                    document.getElementById('pagination').style.display = 'none';
+                    return;
+                }
+
+                // Pair all data first
+                let pairs = pairAlerts(data);
+
+                // Then filter by type if needed
+                if (type === 'ALERT') {
+                    pairs = pairs.filter(p => p.alert);
+                } else if (type === 'END') {
+                    pairs = pairs.filter(p => p.end);
+                }
+
+                // Simple client-side pagination
+                const perPage = 15;
+                tp = Math.ceil(pairs.length / perPage);
+                const start = (p - 1) * perPage;
+                const displayed = pairs.slice(start, start + perPage);
+
+                updatePag();
+
+                if (!displayed.length) {
+                    cards.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>Немає записів</div>';
+                    return;
+                }
+
+                cards.innerHTML = displayed.map((pair, idx) => {
+                    const alert = pair.alert;
+                    const end = pair.end;
+                    const dur = pair.duration;
+                    const th = alert?.threat_types ? fmtTh(alert.threat_types) : '';
+                    const raions = alert?.raions || end?.raions || '';
+                    const countryCount = alert?.country_count || end?.country_count;
+                    const weather = alert?.weather_desc ? (alert.weather_temp + '°C, ' + alert.weather_desc) : '';
+
+                    const hasDetails = th || raions || countryCount || weather;
+                    const id = 'card-' + idx;
+
+                    let rightContent;
+                    if (end) {
+                        rightContent = '<div class="pair-content">' +
+                            '<div class="pair-label">ВІДБІЙ</div>' +
+                            '<div class="pair-location">' + end.location_name + '</div>' +
+                            '<div class="pair-time">' + fmtDate(end.created_at) + '</div>' +
+                            '</div><div class="pair-indicator end"></div>';
+                    } else if (dur) {
+                        rightContent = '<div class="pair-status">' + dur + '</div>';
+                    } else {
+                        rightContent = '<div class="pair-status active">🔴 Активна</div>';
+                    }
+
+                    let detailsHtml = '';
+                    if (hasDetails) {
+                        detailsHtml = '<div class="pair-details" id="' + id + '">';
+                        if (th) detailsHtml += '<div class="detail-row"><span class="detail-key">⚠️ Загрози:</span><span class="detail-val threat">' + th + '</span></div>';
+                        if (raions) detailsHtml += '<div class="detail-row"><span class="detail-key">📍 Райони:</span><span class="detail-val">' + raions + '</span></div>';
+                        if (countryCount) detailsHtml += '<div class="detail-row"><span class="detail-key">🇺🇦 По країні:</span><span class="detail-val">' + countryCount + ' обл. в тривозі</span></div>';
+                        if (weather) detailsHtml += '<div class="detail-row"><span class="detail-key">🌤️ Погода:</span><span class="detail-val">' + weather + '</span></div>';
+                        detailsHtml += '</div>';
+                    }
+
+                    return '<div class="card-pair ' + (hasDetails ? 'expandable' : '') + '" onclick="' + (hasDetails ? "toggleCard('" + id + "')" : '') + '">' +
+                        '<div class="pair-main">' +
+                        '<div class="pair-left ' + (alert ? 'has-data' : '') + '">' +
+                        (alert ? '<div class="pair-indicator alert"></div>' +
+                            '<div class="pair-content">' +
+                            '<div class="pair-label">ТРИВОГА</div>' +
+                            '<div class="pair-location">' + alert.location_name + '</div>' +
+                            '<div class="pair-time">' + fmtDate(alert.created_at) + '</div>' +
+                            '</div>' : '<div class="pair-empty">—</div>') +
+                        '</div>' +
+                        '<div class="pair-center">' +
+                        (dur ? '<div class="pair-duration">⏱ ' + dur + '</div>' : '<div class="pair-arrow">→</div>') +
+                        '</div>' +
+                        '<div class="pair-right ' + (end ? 'has-data' : '') + '">' + rightContent + '</div>' +
+                        (hasDetails ? '<div class="pair-expand">▼</div>' : '') +
+                        '</div>' + detailsHtml +
+                        '</div>';
+                }).join('');
+
+            } catch (e) {
+                cards.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>' + e.message + '</div>';
+            }
+        }
+
+        function pairAlerts(data) {
+            const pairs = [];
+            const pending = {};
+            const sorted = [...data].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+            for (const e of sorted) {
+                const k = e.location_uid;
+                if (e.alert_type === 'ALERT') {
+                    if (pending[k]) pairs.push({ alert: pending[k], end: null, duration: null });
+                    pending[k] = e;
+                } else {
+                    if (pending[k]) {
+                        const ms = new Date(e.created_at) - new Date(pending[k].created_at);
+                        pairs.push({ alert: pending[k], end: e, duration: fD(ms) });
+                        delete pending[k];
+                    } else {
+                        pairs.push({ alert: null, end: e, duration: null });
+                    }
+                }
+            }
+            for (const k in pending) {
+                pairs.push({ alert: pending[k], end: null, duration: null });
+            }
+            return pairs.reverse();
+        }
+
+        function fD(ms) {
+            const m = Math.floor(ms / 60000);
+            return m < 60 ? m + ' хв' : Math.floor(m / 60) + ' год ' + (m % 60) + ' хв';
+        }
+
+        function formatLocalDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + d;
+        }
+
+        function fmtTh(t) {
+            const m = { air_raid: 'Ракетна загроза', artillery_shelling: 'Артобстріл', urban_fights: 'Вуличні бої', nuclear: 'Ядерна загроза', chemical: 'Хімічна загроза' };
+            return t.split(', ').map(x => m[x.trim()] || x).join(', ');
+        }
+
+        function fmtDate(d) {
+            return new Date(d).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function updatePag() {
+            const el = document.getElementById('pagination');
+            el.style.display = tp > 1 ? 'flex' : 'none';
+            document.getElementById('pageInfo').textContent = p + ' / ' + tp;
+            document.getElementById('prev').disabled = p <= 1;
+            document.getElementById('next').disabled = p >= tp;
+        }
+
+        function page(d) { p = Math.max(1, Math.min(tp, p + d)); load(); }
+
+        function reset() {
+            document.getElementById('search').value = '';
+            fp.clear();
+            dateFrom = dateTo = '';
+            type = '';
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('.filter-btn[data-type=""]').classList.add('active');
+            p = 1;
+            load();
+        }
+
+        load();
+        setInterval(load, 60000);
+    </script>
+</body>
+
+</html>

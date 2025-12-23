@@ -1,0 +1,15 @@
+{
+    "watch": [
+        "server.js"
+    ],
+    "ignore": [
+        "*.json",
+        "*.html",
+        "*.ps1",
+        "*.bat",
+        "node_modules",
+        "brain/*",
+        "media/*"
+    ],
+    "delay": "1000"
+}

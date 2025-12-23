@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Alert Indicator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: 'Segoe UI', sans-serif;
+            user-select: none;
+            -webkit-app-region: drag;
+        }
+
+        .indicator {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #222;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+            cursor: move;
+        }
+
+        .inner {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #00ff00;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px currentColor;
+        }
+
+        .indicator.alert .inner {
+            background: #ff0000;
+            animation: pulse 1s infinite;
+        }
+
+        .indicator.error .inner {
+            background: #ffcc00;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(0.9);
+                opacity: 0.7;
+            }
+        }
+
+        .tooltip {
+            position: absolute;
+            top: 60px;
+            background: #333;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .indicator:hover+.tooltip {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="indicator" id="indicator">
+        <div class="inner"></div>
+    </div>
+    <div class="tooltip" id="tooltip">Завантаження...</div>
+
+    <script>
+        const apiUrl = 'http://localhost:3002';
+        const CITY = '22'; // Cherkasy
+        const indicator = document.getElementById('indicator');
+        const tooltip = document.getElementById('tooltip');
+
+        async function checkStatus() {
+            try {
+                const res = await fetch(`${API_URL}/api/status/${CITY}`);
+                const data = await res.json();
+
+                indicator.classList.remove('alert', 'error');
+
+                if (data.alert) {
+                    indicator.classList.add('alert');
+                    tooltip.textContent = `🔴 ТРИВОГА! ${data.location}`;
+                    document.title = '🔴 ТРИВОГА!';
+                } else {
+                    tooltip.textContent = `🟢 Безпечно - ${data.location}`;
+                    document.title = '🟢 Safe';
+                }
+            } catch (e) {
+                indicator.classList.add('error');
+                tooltip.textContent = '⚠️ Немає з\'єднання';
+                document.title = '⚠️ Error';
+            }
+        }
+
+        // Check every 30 seconds
+        checkStatus();
+        setInterval(checkStatus, 30000);
+
+        // Request notification permission
+        if ('Notification' in window) {
+            Notification.requestPermission();
+        }
+    </script>
+</body>
+
+</html>

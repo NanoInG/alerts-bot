@@ -1,0 +1,22 @@
+# Environment variables (contains secrets!)
+.env
+
+# State and runtime files
+state.json
+alertState.json
+history.json
+alert_config.json
+config.json
+subscribers.json
+
+# Dependencies
+node_modules/
+
+# OS files
+*.lnk
+Thumbs.db
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
