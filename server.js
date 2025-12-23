@@ -57,6 +57,11 @@ bot.setMyCommands(commands).catch(e => log(`❌ Commands error: ${e.message}`));
 bot.on('polling_error', (error) => log(`[Polling Error] ${error.code}: ${error.message}`));
 bot.on('error', (error) => log(`[Bot Error] ${error.message}`));
 
+// === Status Auto-Update Tracking ===
+const statusTrackers = new Map(); // chatId -> { messageId, intervalId, lastRefresh, lastStatus }
+const RATE_LIMIT_MS = 20000;      // 20 sec between manual refreshes
+const AUTO_UPDATE_MS = 45000;     // 45 sec auto-update
+
 // =====================
 // HTTP API ROUTES
 // =====================
@@ -316,17 +321,18 @@ const handleUnsubscribe = async (msg) => {
 };
 bot.onText(/\/unsubscribe/, handleUnsubscribe);
 
-// /status handler
-const handleStatus = async (msg) => {
-    const chatId = msg.chat.id;
+// /status handler with inline refresh button
+async function buildStatusText(chatId, includeFooter = true) {
     const alerts = await fetchAlerts();
     const subs = loadSubscribers();
     const sub = subs[chatId];
-
     const country = getCountrySummary(alerts);
+    const now = new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     let text = `📊 <b>Статус тривог</b>\n`;
     text += `━━━━━━━━━━━━━━━\n\n`;
+
+    let currentStatus = 'safe'; // Track for status change detection
 
     if (country.oblastCount > 0) {
         text += `🔴 <b>Тривога в ${country.oblastCount} областях:</b>\n`;
@@ -355,6 +361,7 @@ const handleStatus = async (msg) => {
         const isActive = isAlertActive(alerts, sub.locationUid) || isAlertActive(alerts, subOblastUid);
 
         if (isActive) {
+            currentStatus = 'alert';
             text += `🔴 <b>ТРИВОГА!</b>\n\n`;
 
             const summary = getAlertSummary(alerts, sub.locationUid);
@@ -383,14 +390,133 @@ const handleStatus = async (msg) => {
             text += `${weather.icon} ${weather.desc}\n`;
             text += `🌡️ <b>${weather.temp}°C</b> (відчув. ${weather.feels}°C)\n`;
             text += `💨 Вітер: ${weather.wind} м/с ${weather.windDir}\n`;
-            text += `💧 Вологість: ${weather.humidity}%\n`;
-            text += `📊 Тиск: ${weather.pressure} гПа\n`;
         }
     }
 
-    await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+    if (includeFooter) {
+        text += `\n━━━━━━━━━━━━━━━\n`;
+        text += `� Оновлено: ${now}\n`;
+        text += `⏱️ Авто-оновлення: 45с`;
+    }
+
+    return { text, currentStatus };
+}
+
+const handleStatus = async (msg) => {
+    const chatId = msg.chat.id;
+
+    // Clear previous tracker if exists
+    const existing = statusTrackers.get(chatId);
+    if (existing?.intervalId) {
+        clearInterval(existing.intervalId);
+    }
+
+    const { text, currentStatus } = await buildStatusText(chatId);
+
+    const keyboard = {
+        inline_keyboard: [[
+            { text: '� Оновити', callback_data: 'refresh_status' }
+        ]]
+    };
+
+    const sent = await bot.sendMessage(chatId, text, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard
+    });
+
+    // Start auto-update interval
+    const intervalId = setInterval(async () => {
+        try {
+            const tracker = statusTrackers.get(chatId);
+            if (!tracker) {
+                clearInterval(intervalId);
+                return;
+            }
+
+            const { text: newText, currentStatus: newStatus } = await buildStatusText(chatId);
+
+            // Check if status changed - stop auto-update
+            if (tracker.lastStatus && tracker.lastStatus !== newStatus) {
+                clearInterval(intervalId);
+                const finalText = newText + `\n\n🔔 <b>Статус змінився!</b> Авто-оновлення зупинено.`;
+                await bot.editMessageText(finalText, {
+                    chat_id: chatId,
+                    message_id: tracker.messageId,
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+                statusTrackers.delete(chatId);
+                return;
+            }
+
+            tracker.lastStatus = newStatus;
+            await bot.editMessageText(newText, {
+                chat_id: chatId,
+                message_id: tracker.messageId,
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        } catch (e) {
+            // Message might be deleted or too old
+            clearInterval(intervalId);
+            statusTrackers.delete(chatId);
+        }
+    }, AUTO_UPDATE_MS);
+
+    statusTrackers.set(chatId, {
+        messageId: sent.message_id,
+        intervalId,
+        lastRefresh: Date.now(),
+        lastStatus: currentStatus
+    });
 };
 bot.onText(/\/status/, handleStatus);
+
+// Handle refresh button callback
+bot.on('callback_query', async (query) => {
+    if (query.data !== 'refresh_status') return;
+
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+    const tracker = statusTrackers.get(chatId);
+
+    // Rate limiting
+    if (tracker?.lastRefresh && Date.now() - tracker.lastRefresh < RATE_LIMIT_MS) {
+        const waitSec = Math.ceil((RATE_LIMIT_MS - (Date.now() - tracker.lastRefresh)) / 1000);
+        await bot.answerCallbackQuery(query.id, {
+            text: `⏳ Зачекай ${waitSec} сек перед наступним оновленням`,
+            show_alert: false
+        });
+        return;
+    }
+
+    try {
+        const { text, currentStatus } = await buildStatusText(chatId);
+
+        const keyboard = {
+            inline_keyboard: [[
+                { text: '🔄 Оновити', callback_data: 'refresh_status' }
+            ]]
+        };
+
+        await bot.editMessageText(text, {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: 'HTML',
+            reply_markup: keyboard
+        });
+
+        // Update tracker
+        if (tracker) {
+            tracker.lastRefresh = Date.now();
+            tracker.lastStatus = currentStatus;
+        }
+
+        await bot.answerCallbackQuery(query.id, { text: '✅ Оновлено!' });
+    } catch (e) {
+        await bot.answerCallbackQuery(query.id, { text: '❌ Помилка оновлення' });
+    }
+});
 
 // Show location menu
 async function showLocationMenu(chatId, type, page = 0) {

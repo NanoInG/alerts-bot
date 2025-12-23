@@ -11,7 +11,7 @@ subscribers.json
 
 # Dependencies
 node_modules/
-
+package-lock.json
 # OS files
 *.lnk
 Thumbs.db
