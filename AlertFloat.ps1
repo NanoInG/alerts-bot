@@ -228,7 +228,14 @@ $showItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $showItem.Text = if ($script:floatingVisible) { "Hide Strip" } else { "Show Strip" }
 $showItem.Add_Click({
         $script:floatingVisible = -not $script:floatingVisible
-        foreach ($f in $script:floats) { $f.Visible = $script:floatingVisible }
+        foreach ($f in $script:floats) { 
+            $f.Visible = $script:floatingVisible
+            if ($script:floatingVisible) {
+                $f.TopMost = $true
+                $f.BringToFront()
+                $f.Refresh()
+            }
+        }
         $showItem.Text = if ($script:floatingVisible) { "Hide Strip" } else { "Show Strip" }
         Save-Config
     })
@@ -364,6 +371,23 @@ function DoCheck {
         else {
             $tray.Icon = $iconGreen; $statusItem.Text = "Safe"
             foreach ($f in $script:floats) { $f.BackColor = $colorSafe }
+        }
+
+        # Keep strips healthy: refresh position and ensure TopMost
+        $screenIdx = 0
+        foreach ($screen in [System.Windows.Forms.Screen]::AllScreens) {
+            if ($screenIdx -lt $script:floats.Count) {
+                $f = $script:floats[$screenIdx]
+                if ($f -and -not $f.IsDisposed) {
+                    $f.Left = $screen.Bounds.Left
+                    $f.Top = $screen.WorkingArea.Bottom - 1
+                    $f.Width = $screen.Bounds.Width
+                    if ($script:floatingVisible) {
+                        $f.TopMost = $true
+                    }
+                }
+            }
+            $screenIdx++
         }
     }
     catch { $statusItem.Text = "API Error" }
