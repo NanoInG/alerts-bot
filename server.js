@@ -20,7 +20,7 @@ import {
 } from './src/config.js';
 import { log } from './src/utils.js';
 import { LOCATIONS } from './src/locations.js';
-import { loadSubscribers, saveSubscribers, subscribe, unsubscribe } from './src/subscribers.js';
+import { loadSubscribers, saveSubscribers, subscribe, unsubscribe, updateSubscriberAlertState } from './src/subscribers.js';
 import {
     fetchAlerts, isAlertActive, getAlertDetails,
     getCountrySummary, getAlertSummary, translateAlertType
@@ -171,7 +171,7 @@ app.post('/api/test/send', async (req, res) => {
     log(`Test send: ${JSON.stringify(req.body)}`);
     const { locationUid, type } = req.body;
 
-    const subs = loadSubscribers();
+    const subs = await loadSubscribers();
     let count = 0;
 
     // Mock weather
@@ -274,7 +274,7 @@ function getRandomImage(isAlert) {
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
     const name = msg.from.first_name || 'друже';
-    const subs = loadSubscribers();
+    const subs = await loadSubscribers();
     const sub = subs[chatId];
 
     let text = `👋 Привіт, <b>${name}</b>!\n\n`;
@@ -324,7 +324,7 @@ bot.onText(/\/unsubscribe/, handleUnsubscribe);
 // /status handler with inline refresh button
 async function buildStatusText(chatId, includeFooter = true) {
     const alerts = await fetchAlerts();
-    const subs = loadSubscribers();
+    const subs = await loadSubscribers();
     const sub = subs[chatId];
     const country = getCountrySummary(alerts);
     const now = new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -581,14 +581,15 @@ bot.on('callback_query', async (q) => {
 // =====================
 async function checkAlertsForSubscribers() {
     const alerts = await fetchAlerts();
-    const subs = loadSubscribers();
+    const subs = await loadSubscribers();
 
     for (const [chatId, sub] of Object.entries(subs)) {
         const isActive = isAlertActive(alerts, sub.locationUid);
 
         if (isActive !== sub.lastAlertState) {
+            // Update alert state in database
+            await updateSubscriberAlertState(chatId, isActive);
             sub.lastAlertState = isActive;
-            saveSubscribers(subs);
 
             const coords = getLocationCoords(sub.locationUid);
             const weather = await fetchWeather(coords.lat, coords.lon);
@@ -596,8 +597,10 @@ async function checkAlertsForSubscribers() {
 
             let text = '';
 
+            let summary = { types: {}, raions: [], hasMore: false };
+
             if (isActive) {
-                const summary = getAlertSummary(alerts, sub.locationUid);
+                summary = getAlertSummary(alerts, sub.locationUid);
 
                 text = `🔴 <b>ТРИВОГА!</b>\n`;
                 text += `━━━━━━━━━━━━━━━\n`;
@@ -673,11 +676,11 @@ async function checkAlertsForSubscribers() {
                     locationUid: sub.locationUid,
                     locationName: sub.locationName,
                     alertType: isActive ? 'ALERT' : 'END',
-                    threatTypes: Object.keys(summary.types).join(', ') || null,
+                    threatTypes: summary?.types ? Object.keys(summary.types).join(', ') : null,
                     weatherTemp: weather?.temp || null,
                     weatherDesc: weather?.desc || null,
                     weatherIcon: weather?.icon || null,
-                    raions: summary.raions.join(', ') || null,
+                    raions: summary?.raions ? summary.raions.join(', ') : null,
                     countryCount: country.oblastCount || null
                 });
             } catch (e) {
@@ -788,7 +791,17 @@ async function broadcastToGroups() {
 
         const imagePath = getRandomImage(isActive);
 
+        // Get subscriber chat IDs to avoid duplicates
+        const subs = await loadSubscribers();
+        const subscriberChatIds = Object.keys(subs);
+
         for (const chatId of broadcastChatIds) {
+            // Skip if this chat is already a subscriber (they get personal notification)
+            if (subscriberChatIds.includes(chatId.toString())) {
+                log(`Broadcast skipped for ${chatId}: already a subscriber`);
+                continue;
+            }
+
             try {
                 await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
                 log(`Broadcast to ${chatId}: ${isActive ? 'ALERT' : 'END'}`);
