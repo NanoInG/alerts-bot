@@ -688,6 +688,16 @@
                             '</div><div class="pair-indicator end"></div>';
                     } else if (dur) {
                         rightContent = '<div class="pair-status">' + dur + '</div>';
+                    } else if (alert) {
+                        // Calculate active duration from alert start to now
+                        const alertStart = new Date(alert.created_at);
+                        const now = new Date();
+                        const diffMs = now - alertStart;
+                        const diffMins = Math.floor(diffMs / 60000);
+                        const hours = Math.floor(diffMins / 60);
+                        const mins = diffMins % 60;
+                        const activeDur = hours > 0 ? '⏱️ ' + hours + ' год ' + mins + ' хв' : '⏱️ ' + mins + ' хв';
+                        rightContent = '<div class="pair-status active">🔴 Активна<br><small>' + activeDur + '</small></div>';
                     } else {
                         rightContent = '<div class="pair-status active">🔴 Активна</div>';
                     }

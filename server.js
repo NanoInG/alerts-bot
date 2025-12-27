@@ -670,19 +670,7 @@ async function checkAlertsForSubscribers() {
             try {
                 await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
                 log(`Alert sent to ${chatId}: ${isActive ? 'START' : 'END'}`);
-
-                // Save to database with extended data
-                await saveAlertHistory({
-                    locationUid: sub.locationUid,
-                    locationName: sub.locationName,
-                    alertType: isActive ? 'ALERT' : 'END',
-                    threatTypes: summary?.types ? Object.keys(summary.types).join(', ') : null,
-                    weatherTemp: weather?.temp || null,
-                    weatherDesc: weather?.desc || null,
-                    weatherIcon: weather?.icon || null,
-                    raions: summary?.raions ? summary.raions.join(', ') : null,
-                    countryCount: country.oblastCount || null
-                });
+                // Note: history is saved in broadcastToGroups to avoid duplicates
             } catch (e) {
                 log(`Send failed: ${e.message}`);
                 try {
