@@ -449,6 +449,39 @@
             color: var(--text-muted);
         }
 
+        /* Fancy Separator & RF Text */
+        .fancy-separator {
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--border), transparent);
+            margin: 12px 0;
+            opacity: 0.6;
+        }
+
+        .rf-row {
+            justify-content: center;
+            text-align: center;
+            padding-top: 4px;
+        }
+
+        .rf-text {
+            font-size: 14px;
+            font-weight: 500;
+            background: linear-gradient(45deg, #ef4444, #f97316);
+            -webkit-background-clip: text;
+            background-clip: text;
+            /* standard property */
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 2px 10px rgba(239, 68, 68, 0.2);
+        }
+
+        .region-list {
+            padding-left: 132px;
+            /* indent to align with value column */
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
         .empty-icon {
             font-size: 48px;
             margin-bottom: 16px;
@@ -676,7 +709,7 @@
                     const countryCount = alert?.country_count || end?.country_count;
                     const weather = alert?.weather_desc ? (alert.weather_temp + '°C, ' + alert.weather_desc) : '';
 
-                    const hasDetails = th || raions || countryCount || weather;
+                    const hasDetails = th || raions || countryCount || weather || (alert && alert.rf_info);
                     const id = 'card-' + idx;
 
                     let rightContent;
@@ -707,8 +740,19 @@
                         detailsHtml = '<div class="pair-details" id="' + id + '">';
                         if (th) detailsHtml += '<div class="detail-row"><span class="detail-key">⚠️ Загрози:</span><span class="detail-val threat">' + th + '</span></div>';
                         if (raions) detailsHtml += '<div class="detail-row"><span class="detail-key">📍 Райони:</span><span class="detail-val">' + raions + '</span></div>';
-                        if (countryCount) detailsHtml += '<div class="detail-row"><span class="detail-key">🇺🇦 По країні:</span><span class="detail-val">' + countryCount + ' обл. в тривозі</span></div>';
+                        if (countryCount) {
+                            detailsHtml += '<div class="detail-row"><span class="detail-key">💙💛 По країні:</span><span class="detail-val">' + countryCount + ' обл. в тривозі</span></div>';
+                            if (alert && alert.country_info) {
+                                detailsHtml += '<div class="detail-row region-list"><span class="detail-val">' + alert.country_info + '</span></div>';
+                            }
+                        }
                         if (weather) detailsHtml += '<div class="detail-row"><span class="detail-key">🌤️ Погода:</span><span class="detail-val">' + weather + '</span></div>';
+
+                        if (alert && alert.rf_info) {
+                            detailsHtml += '<div class="fancy-separator"></div>';
+                            detailsHtml += '<div class="detail-row rf-row"><span class="detail-val rf-text">' + alert.rf_info + '</span></div>';
+                        }
+
                         detailsHtml += '</div>';
                     }
 

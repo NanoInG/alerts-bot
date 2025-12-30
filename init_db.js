@@ -66,6 +66,19 @@ async function initDatabase() {
         `);
         console.log('   ✅ subscribers created\n');
 
+        // Create active_alerts table
+        console.log('🔔 Creating table: active_alerts');
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS active_alerts (
+                chat_id BIGINT PRIMARY KEY,
+                message_id INT,
+                location_uid VARCHAR(50),
+                base_text TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        `);
+        console.log('   ✅ active_alerts created\n');
+
         // Show summary
         const [tables] = await connection.query('SHOW TABLES');
         console.log('═══════════════════════════════════');

@@ -1,0 +1,991 @@
+﻿
+<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/html">
+<head>
+    <title>&#x41E;&#x444;&#x456;&#x446;&#x456;&#x439;&#x43D;&#x430; &#x43A;&#x430;&#x440;&#x442;&#x430; &#x43F;&#x43E;&#x432;&#x456;&#x442;&#x440;&#x44F;&#x43D;&#x438;&#x445; &#x442;&#x440;&#x438;&#x432;&#x43E;&#x433; &#x423;&#x43A;&#x440;&#x430;&#x457;&#x43D;&#x438;</title>
+    <meta charset="UTF-8">
+    <meta name="description" content="Карта повітряних тривог України: актуальна інформація про повітряні тривоги на мапі України.">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico?v=rmkDGTrhmS6ik1j9I3SPiPCJAoEP0lDdvKkf9YX1m_s" />
+    <link rel="stylesheet" type="text/css" href="/css/svgMap.css?v=152&amp;v=nMISOpD-xdsQl_ev6ZncSI4piOp8t72vm8M-FgPB8uE">
+    <link rel="stylesheet" type="text/css" href="/css/newstyle.css?v=157&amp;v=RecTrfwn2LMoDJiN2nunn59FzpS5WJw37kZN6gpM5vk">  
+
+    <!--===============================================================================================-->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/centrifugal/centrifuge-js@2.8.5/dist/centrifuge.min.js"></script>
+    <h1 style='display: none;'>Актуальна карта повітряних тривог України</h1>
+</head>
+<body>
+
+
+<div class="app loading">
+    <div class="header">
+        <div class="header-wrapper">
+            <div class="header-container">
+                <div class="header-title">
+                    <div class="header-title__logo">
+                        <img src="/images/content/logo.svg" alt="logo">
+                    </div>
+                    <div class="header-title__text">
+                        <p>Офіційна карта повітряних тривог України</p>
+                        <span>map.ukrainealarm.com</span>
+                    </div>
+                </div>
+                <div class="header-links">
+                    <a href="/confidentiality" class="header-link">Політика конфіденційності</a> 
+                    <a href="https://ukrainealarm.com/" class="header-link">Застосунок Повітряна тривога</a>
+                    <a href="https://ukrainealarm.com/" class="header-link">Контакти</a>
+                    <a href="https://api.ukrainealarm.com/" class="header-link">Для розробників (API)</a>
+                </div>
+                <div class="header-hamburger">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="content">
+    <div class="toolbar">
+        <button class="statistics-button">Статистика</button>
+        <div class="theme">
+            <span class="theme-title">
+                Тема
+            </span>
+            <div class="theme-switcher"></div>
+        </div>
+    </div>
+    <!--<div class="language">
+                <div class="theme">
+                    <span class="theme-title">
+                        UA
+                    </span>
+                    <div class="language-switcher"></div>
+                    <span class="theme-title-end" name="ru-lang">
+                        RU
+                    </span>
+                </div>
+    </div>-->
+    <div class="map">
+        
+<audio id="updateSound" src="/sounds/updateMapSound.wav"></audio>
+<input id="api-token" type="hidden" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYmYiOjE3NjcwODYxNTQsImV4cCI6MTc2NzA4OTc1NCwiaXNzIjoidWtyYWluZS1hbGFybS1tYXAiLCJhdWQiOiJ1a3JhaW5lLWFsYXJtLW1hcCJ9.r4jpHtzzw0upk17LWgBxS54ZpqkIFHQ2JD9Q_Ed7h1o"/>
+<input id="centrifugo-token" type="hidden" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNzQzNDA1ODYzIiwibmJmIjoxNzY3MDg2MTU0LCJleHAiOjE3NjcwOTMzNTQsImlhdCI6MTc2NzA4NjE1NH0.wzy5EVCJLLVg2lf7IE9mj1g1LXE-iF89Z7KV2iwaDB0"/>
+<input id="centrifugo-url" type="hidden" value="wss://ws.ukrainealarm.com/connection/websocket"/> 
+<div class="appHolder" style="position: absolute; height: 100%; width: 100%;"> 
+    <div class="svgMapHolder" style="height: 100%">
+        <div class="svgMapIconsHolder" style="position: absolute; height: 100%; z-index: 1;">
+            <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                 style="position: absolute;" class="svgMapIcons"
+                 viewBox="0 0 260 175" id="mapIcons"></svg> 
+        </div>
+    </div>
+</div>
+ 
+<script src="/js/popper.min.js"></script>
+<script src="/js/tippy.js"></script>
+<script src="/js/mapUpdater.js?v=148&amp;v=ePQUHngaBE1SNoGIMKmkGTmJ46I1jzRqR3O6ppH13NA"></script>
+<script type="text/javascript" src="js/mapCore.js?v=165&amp;v=zxOTqgOfL5FolgY60ZD2RdzUu5yPyuXrmBA1BDbT_Sw"></script>
+<script type="text/javascript" src="/js/app.js?v=a9kqNqNrxwYWGONfpMluIj1sjAVdz1X1I_ZFiCyRUW4"></script>
+<script src="/js/onlinecount.js?v=LdV47vcI0pAThu4eTbbYfYJptKnvVDLxEveu-fFZ6Lw"></script>
+<script>
+    $(document).ready(function(){
+        StatsHide();
+    });
+
+    function StatsShow(){
+        $("#statistics").show();
+    }
+ 
+    function StatsHide(){
+        $("#statistics").hide();
+    }
+</script>
+
+<script>
+    $(document).ready(function(){
+        StatsHide();
+    });
+
+    function StateAlertsShow(){
+        $("#stateAlertsStatistic").show();
+    }
+
+    function StateAlertsHide(){
+        $("#stateAlertsStatistic").hide();
+    }
+</script>
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9QLR0Q6YVH"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-9QLR0Q6YVH');
+</script>
+
+    </div>
+    
+        <div class="info">
+            <div class="icon-info">
+                <img src="/images/content/icon_info.svg" alt="icon">
+                <img src="/images/content/icon_info_light.svg" alt="icon">
+            </div>
+            <div class="types">
+                <div class="type" id="legend-air" style="display: none">
+                    <div class="icon"></div>
+                    <p>Повітряна тривога</p>
+                </div>
+                <div class="type" id="legend-artillery" style="display: none">
+                    <div class="icon"></div>
+                    <p>Загроза артобстрілу</p>
+                </div>
+                <div class="type" id="legend-street" style="display: none">
+                    <div class="icon"></div>
+                    <p>Загроза вуличних боїв</p>
+                </div>
+                <div class="type" id="legend-chimical" style="display: none">
+                    <div class="icon"></div>
+                    <p>Хімічна загроза</p>
+                </div>
+                <div class="type" id="legend-nuclear" style="display: none">
+                    <div class="icon"></div>
+                    <p>Радіаційна загроза</p>
+                </div>
+                <div class="type" id="legend-many" style="display: none">
+                    <div class="icon">
+                        <img src="/images/content/many.svg" alt="icon">
+                    </div>
+                    <p>Декілька видів тривог</p>
+                </div>
+                <div class="type" id="legend-without">
+                    <div class="icon"></div>
+                    <p>Немає тривоги</p>
+                </div>
+                <div class="type">
+                    <div class="icon"></div>
+                    <p>Тривога на болотах</p>
+                </div>
+            </div>
+            <div class="online" style="display: none">
+                Зараз на сайті <span>99 090</span>
+            </div>
+        </div>
+        <div class="general-button">
+            <div class="dangers-info">
+                <div class="danger" style="display: none">
+                    <div class="danger-icon">
+                        <img id="icon" src="/images/content/icon_air.svg" alt="icon">
+                    </div>
+                    <p class="danger-count">24</p>
+                </div>
+                <span>Загрози:</span>
+                <div class="dangers">
+                    
+                </div> 
+            </div>
+            <button class="icon">
+                <img src="/images/content/icon_arrow.svg" alt="icon">
+                <img src="/images/content/icon_arrow_light.svg" alt="icon">
+            </button>
+        </div>
+        <div class="general-aside">
+        <div class="city-item" style="display: none">
+            <div class="icon">
+                <img id="alertIcon" src="/images/content/icon_air.svg" alt="icon">
+                </div>
+            <div class="text">
+                <div class="title">Дніпропетровська область</div>
+                <div class="description air">Повітряна тривога</div>
+                <div class="date">
+                    <p class="time">Cьогодні о 10:37</p>
+                    <p class="duration">195 д 15 год 37 хв</p>
+                    </div>
+                </div>
+            </div>
+            <div class="city-items">
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_air.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Дніпропетровська область</div>
+                        <div class="description air">Повітряна тривога</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_chemical.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Запорізька область</div>
+                        <div class="description chemical">Хімічна загроза</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_street.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Харківська область</div>
+                        <div class="description street">Вуличні бої</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_artillery.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Луганська область</div>
+                        <div class="description artillery">Загроза артобстрілу</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_radiation.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Полтавська область</div>
+                        <div class="description radiation">Радіаційна небезпека</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_air.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Дніпропетровська область</div>
+                        <div class="description air">Повітряна тривога</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_chemical.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Запорізька область</div>
+                        <div class="description chemical">Хімічна загроза</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_street.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Харківська область</div>
+                        <div class="description street">Вуличні бої</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_artillery.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Луганська область</div>
+                        <div class="description artillery">Загроза артобстрілу</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_radiation.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Полтавська область</div>
+                        <div class="description radiation">Радіаційна небезпека</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_air.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Дніпропетровська область</div>
+                        <div class="description air">Повітряна тривога</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_chemical.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Запорізька область</div>
+                        <div class="description chemical">Хімічна загроза</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_street.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Харківська область</div>
+                        <div class="description street">Вуличні бої</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_artillery.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Луганська область</div>
+                        <div class="description artillery">Загроза артобстрілу</div>
+                        <div class="date">
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="city-item">
+                    <div class="icon">
+                        <img src="/images/content/icon_radiation.svg" alt="icon">
+                    </div>
+                    <div class="text">
+                        <div class="title">Полтавська область</div>
+                        <div class="description radiation">Радіаційна небезпека</div>
+                        <div class="date"> 
+                            <p class="time">Cьогодні о 10:37</p>
+                            <p class="duration">195 д 15 год 37 хв</p>
+                        </div> 
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bottom-banner" style="display: flex">
+                <a id="bottom-banner_a" href="https://www.patreon.com/user?u=93093864" class="bottom-banner_item"><img id="bottom-banner_img" src="banner_01.png" style="bottom: 100px; left: 0; right: 0; max-height: 100px; max-width: 100%;"></a> 
+            </div>
+    </div>
+    <div class="popup statistics">
+        <div class="layout"></div>
+        <div class="container">
+            <div class="head">
+                <p>Статистика</p>
+                <div class="icon" id="close-popup-statistics">
+                    <img src="/images/content/icon_close.svg" alt="icon">
+                    <img src="/images/content/icon_close_light.svg" alt="icon">
+                </div>
+            </div>
+            <div class="timeslots">
+                <button class="timeslot" id="statisticToday">Сьогодні</button>
+                <button class="timeslot active" id="statisticWeek">Останній тиждень</button>
+                <button class="timeslot" id="statisticAll" style="display: none;">Весь час</button> 
+            </div>
+        <div class="items-head">
+            <div class="title">Область / Громада</div>
+            <div class="title">Тривалість</div>
+            <div class="title">Кількість</div>
+        </div>
+        <div class="item" id="statisticItem" style="display: none">
+            <div class="item-top">
+                <div class="info">
+                    <div class="icon">
+                        <img src="/images/content/icon_air.svg" alt="icon">
+                        </div>
+                    <div class="text">
+                        <div class="title">Кривоозерська тергромада</div>
+                        <div class="description air">Повітряна тривога</div>
+                        </div>
+                    </div>
+                <div class="duration">
+                    <span>195 д, 15 год, 37 хв</span>
+                    </div>
+                <div class="count">
+                    <span>1290</span>
+                    </div>
+                </div>
+            <div class="item-line">
+                <div class="active-line air" id="progress" style="width: 50%"></div>
+                </div>
+            </div>
+            <div class="items" id="statisticItems">
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description air">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line air" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_radiation.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description radiation">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line radiation" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description air">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line air" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_radiation.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description radiation">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line radiation" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description air">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line air" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_radiation.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description radiation">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line radiation" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description air">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line air" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_radiation.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description radiation">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line radiation" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description air">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line air" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_radiation.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="title">Кривоозерська тергромада</div>
+                                <div class="region">Первомайський район, Миколаївська область</div>
+                                <div class="description radiation">Повітряна тривога</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>195 д, 15 год, 37 хв</span>
+                        </div>
+                        <div class="count">
+                            <span>1290</span>
+                        </div>
+                    </div>
+                    <div class="item-line">
+                        <div class="active-line radiation" style="width: 50%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="popup region">
+        <div class="layout"></div>
+        <div class="container">
+        <div class="head">
+            <p id="regionHeadTitle">Вінницька область</p>
+            <div class="icon" id="close-popup-region">
+                <img src="/images/content/icon_close.svg" alt="icon">
+                <img src="/images/content/icon_close_light.svg" alt="icon">
+            </div>
+        </div>
+        <div class="items" style="height: auto; overflow-y: hidden; display: none;">
+            <div class="item region">
+                <div class="item-top"> 
+                    <div class="dateHolder" style="justify-content: center">
+                        <input class="datePicker" type="date" id="startDate" onchange="onDateChanged(event);"/>
+                    </div>
+                    <div class="dateHolder" style="justify-content: center">
+                        <input class="datePicker" type="date" id="endDate" onchange="onDateChanged(event);"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="items-head region">
+            <div class="title">Тип тривоги</div>
+            <div class="title">Період</div>
+            <div class="title">Тривалість</div>
+        </div>
+        <div class="item region" id="regionItem" style="display: none">
+            <div class="item-top">
+                <div class="info">
+                    <div class="icon">
+                        <img id="alertIcon" src="/images/content/icon_air.svg" alt="icon">
+                        </div>
+                    <div class="text">
+                        <div class="description air" id="alertType">Повітряна тривога</div>
+                        <div class="region">Вінницька область</div>
+                        </div>
+                    </div>
+                <div class="duration">
+                    <span id="time">16 жовтня, 10:37 – 12:10</span>
+                    </div>
+                <div class="count">
+                    <span id="durationTime">2 год. 37 хв.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="items" id="regionItems">
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description air">Повітряна тривога</div>
+                                <div class="region">Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_artillery.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description artillery">Загроза артобстрілу</div>
+                                <div class="region">Первомайський район, Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description air">Повітряна тривога</div>
+                                <div class="region">Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_artillery.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description artillery">Загроза артобстрілу</div>
+                                <div class="region">Первомайський район, Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description air">Повітряна тривога</div>
+                                <div class="region">Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_artillery.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description artillery">Загроза артобстрілу</div>
+                                <div class="region">Первомайський район, Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description air">Повітряна тривога</div>
+                                <div class="region">Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_artillery.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description artillery">Загроза артобстрілу</div>
+                                <div class="region">Первомайський район, Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description air">Повітряна тривога</div>
+                                <div class="region">Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_artillery.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description artillery">Загроза артобстрілу</div>
+                                <div class="region">Первомайський район, Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_air.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description air">Повітряна тривога</div>
+                                <div class="region">Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="item region">
+                    <div class="item-top">
+                        <div class="info">
+                            <div class="icon">
+                                <img src="/images/content/icon_artillery.svg" alt="icon">
+                            </div>
+                            <div class="text">
+                                <div class="description artillery">Загроза артобстрілу</div>
+                                <div class="region">Первомайський район, Вінницька область</div>
+                            </div>
+                        </div>
+                        <div class="duration">
+                            <span>16 жовтня, 10:37 – 12:10</span>
+                        </div>
+                        <div class="count">
+                            <span>2 год. 37 хв.</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <div class="menu">
+        <div class="content">
+            <div class="toolbar">
+                <div class="theme">
+                <span class="theme-title">
+                    Тема
+                </span>
+                    <div class="theme-switcher"></div>
+                </div>
+                <button class="statistics-button">Статистика</button> 
+            </div>
+        </div>
+        <div class="links">
+            <a href="/confidentiality" class="header-link">Політика конфіденційності</a>
+            <a href="https://ukrainealarm.com/" class="header-link">Застосунок Повітряна тривога</a>
+            <a href="https://ukrainealarm.com/" class="header-link">Контакти</a>
+            <a href="https://api.ukrainealarm.com/" class="header-link">Для розробників (API)</a>
+        </div>
+    </div>
+</div>
+
+
+</body>
+</html>
+

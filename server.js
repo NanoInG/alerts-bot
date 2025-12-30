@@ -26,6 +26,8 @@ import {
     getCountrySummary, getAlertSummary, translateAlertType
 } from './src/alerts.js';
 import { fetchWeather, getLocationCoords } from './src/weather.js';
+import { getRfAlertsString, getGlobalThreats } from './src/rf_alerts.js';
+import { initUpdater, trackAlertMessage, stopTracking } from './src/message_updater.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,6 +38,7 @@ app.use(express.json());
 
 // === Telegram Bot ===
 const bot = new TelegramBot(token, { polling: !disablePolling });
+initUpdater(bot);
 
 if (disablePolling) {
     log('⚠️ Polling DISABLED (Running in API-only mode)');
@@ -136,7 +139,7 @@ app.get('/api/locations', (req, res) => {
 });
 
 // GET /api/history (Database with pagination and filters)
-import { getAlertHistory, getHistoryStats, saveAlertHistory } from './src/db.js';
+import { getAlertHistory, getHistoryStats, saveAlertHistory, addActiveAlert, removeActiveAlert, getAllActiveAlerts } from './src/db.js';
 
 app.get('/api/history', async (req, res) => {
     const { page = 1, limit = 20, type, search, dateFrom, dateTo, locationUid } = req.query;
@@ -594,13 +597,22 @@ async function checkAlertsForSubscribers() {
             const coords = getLocationCoords(sub.locationUid);
             const weather = await fetchWeather(coords.lat, coords.lon);
             const country = getCountrySummary(alerts);
+            const summary = getAlertSummary(alerts, sub.locationUid);
+
+            // Merge global threats
+            const globalThreats = await getGlobalThreats();
+            if (globalThreats.ballistics) summary.types['ballistics'] = true;
+            if (globalThreats.strategic_aviation) summary.types['strategic_aviation'] = true;
+            if (globalThreats.mig_takeoff) summary.types['mig_takeoff'] = true;
+            if (globalThreats.mig_rockets) summary.types['mig_rockets'] = true;
+            if (globalThreats.artillery) summary.types['artillery'] = true;
+            if (globalThreats.boats) summary.types['boats'] = true;
+            if (globalThreats.tactical_rockets) summary.types['tactical_rockets'] = true;
 
             let text = '';
-
-            let summary = { types: {}, raions: [], hasMore: false };
+            let baseText = '';
 
             if (isActive) {
-                summary = getAlertSummary(alerts, sub.locationUid);
 
                 text = `🔴 <b>ТРИВОГА!</b>\n`;
                 text += `━━━━━━━━━━━━━━━\n`;
@@ -640,6 +652,11 @@ async function checkAlertsForSubscribers() {
                 }
 
                 text += `🚨 <b>Негайно в укриття!</b>`;
+                baseText = text;
+                const rfText = await getRfAlertsString();
+                if (rfText) text += `\n\n${rfText}`;
+
+
 
             } else {
                 text = `🟢 <b>Відбій тривоги</b>\n`;
@@ -665,12 +682,25 @@ async function checkAlertsForSubscribers() {
                 }
             }
 
+            if (!isActive) {
+                baseText = text;
+                const rfText = await getRfAlertsString();
+                if (rfText) text += `\n\n${rfText}`;
+            }
             const imagePath = getRandomImage(isActive);
 
             try {
-                await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
+                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
                 log(`Alert sent to ${chatId}: ${isActive ? 'START' : 'END'}`);
-                // Note: history is saved in broadcastToGroups to avoid duplicates
+
+                if (isActive) {
+                    trackAlertMessage(chatId, sentMsg.message_id, baseText);
+                    await addActiveAlert(chatId, sentMsg.message_id, sub.locationUid, baseText);
+                } else {
+                    stopTracking(chatId);
+                    await removeActiveAlert(chatId);
+                }
+
             } catch (e) {
                 log(`Send failed: ${e.message}`);
                 try {
@@ -712,7 +742,18 @@ async function broadcastToGroups() {
         const country = getCountrySummary(alerts);
         const summary = getAlertSummary(alerts, targetUid);
 
+        // Merge global threats
+        const globalThreats = await getGlobalThreats();
+        if (globalThreats.ballistics) summary.types['ballistics'] = true;
+        if (globalThreats.strategic_aviation) summary.types['strategic_aviation'] = true;
+        if (globalThreats.mig_takeoff) summary.types['mig_takeoff'] = true;
+        if (globalThreats.mig_rockets) summary.types['mig_rockets'] = true;
+        if (globalThreats.artillery) summary.types['artillery'] = true;
+        if (globalThreats.boats) summary.types['boats'] = true;
+        if (globalThreats.tactical_rockets) summary.types['tactical_rockets'] = true;
+
         let text = '';
+        let baseText = '';
 
         if (isActive) {
             text = `🔴 <b>ТРИВОГА!</b>\n`;
@@ -753,6 +794,9 @@ async function broadcastToGroups() {
             }
 
             text += `🚨 <b>Негайно в укриття!</b>`;
+            baseText = text;
+            const rfStartText = await getRfAlertsString();
+            if (rfStartText) text += `\n\n${rfStartText}`;
         } else {
             text = `🟢 <b>Відбій тривоги</b>\n`;
             text += `━━━━━━━━━━━━━━━\n`;
@@ -777,6 +821,11 @@ async function broadcastToGroups() {
             }
         }
 
+        if (!isActive) {
+            baseText = text;
+            const rfText = await getRfAlertsString();
+            if (rfText) text += `\n\n${rfText}`;
+        }
         const imagePath = getRandomImage(isActive);
 
         // Get subscriber chat IDs to avoid duplicates
@@ -791,10 +840,20 @@ async function broadcastToGroups() {
             }
 
             try {
-                await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
+                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
                 log(`Broadcast to ${chatId}: ${isActive ? 'ALERT' : 'END'}`);
+
+                if (isActive) {
+                    trackAlertMessage(chatId, sentMsg.message_id, baseText);
+                    await addActiveAlert(chatId, sentMsg.message_id, targetUid, baseText);
+                } else {
+                    stopTracking(chatId);
+                    await removeActiveAlert(chatId);
+                }
             } catch (e) {
                 log(`Broadcast failed: ${e.message}`);
+                // If blocked, stop tracking
+                if (e.message.includes('blocked')) stopTracking(chatId);
             }
         }
 
@@ -808,8 +867,47 @@ async function broadcastToGroups() {
             weatherDesc: weather?.desc || null,
             weatherIcon: weather?.icon || null,
             raions: summary.raions.join(', ') || null,
-            countryCount: country.oblastCount || null
+            countryCount: country.oblastCount || null,
+            rfInfo: rfText || null,
+            countryInfo: country.oblastCount > 0 ? country.oblasts.map(o => o.replace(' область', '')).join(', ') : null
         });
+    }
+}
+
+// =====================
+// RESTORE ACTIVE ALERTS
+// =====================
+async function restoreActiveAlerts() {
+    log('🔄 Restoring active alerts...');
+    const activeRecords = await getAllActiveAlerts();
+    const alerts = await fetchAlerts();
+
+    for (const record of activeRecords) {
+        const isActive = isAlertActive(alerts, record.location_uid);
+
+        if (isActive) {
+            log(`Re-tracking alert for ${record.chat_id}`);
+            trackAlertMessage(record.chat_id, record.message_id, record.base_text);
+        } else {
+            log(`Alert finished while offline for ${record.chat_id}. Performing final update.`);
+
+            // Final update with latest RF info
+            const rfText = await getRfAlertsString();
+            let finalText = record.base_text;
+            if (rfText) finalText += `\n\n${rfText}`;
+
+            try {
+                await bot.editMessageCaption(finalText, {
+                    chat_id: record.chat_id,
+                    message_id: record.message_id,
+                    parse_mode: 'HTML'
+                });
+            } catch (e) {
+                log(`Final update failed for ${record.chat_id}: ${e.message}`);
+            }
+
+            await removeActiveAlert(record.chat_id);
+        }
     }
 }
 
@@ -858,6 +956,9 @@ app.listen(PORT, () => {
     log(`🤖 Bot ${disablePolling ? 'SEND-ONLY' : 'POLLING'}`);
     log(`📍 Target: ${config.targetRegion}`);
     log(`📡 Broadcast to ${broadcastChatIds.length} groups`);
+
+    // Restore alerts
+    restoreActiveAlerts();
 
     // Start tray indicator after server is ready
     setTimeout(startTrayIndicator, 1000);

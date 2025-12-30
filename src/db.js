@@ -34,15 +34,17 @@ export async function saveAlertHistory(data) {
         weatherDesc = null,
         weatherIcon = null,
         raions = null,
-        countryCount = null
+        countryCount = null,
+        rfInfo = null,
+        countryInfo = null
     } = typeof data === 'object' ? data : { locationUid: arguments[0], locationName: arguments[1], alertType: arguments[2] };
 
     try {
         await pool.execute(
             `INSERT INTO alerts_history 
-            (location_uid, location_name, alert_type, threat_types, weather_temp, weather_desc, weather_icon, raions, country_count) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [locationUid, locationName, alertType, threatTypes, weatherTemp, weatherDesc, weatherIcon, raions, countryCount]
+            (location_uid, location_name, alert_type, threat_types, weather_temp, weather_desc, weather_icon, raions, country_count, rf_info, country_info) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [locationUid, locationName, alertType, threatTypes, weatherTemp, weatherDesc, weatherIcon, raions, countryCount, rfInfo, countryInfo]
         );
         return true;
     } catch (error) {
@@ -158,6 +160,38 @@ export async function migrateHistoryFromJson(jsonData) {
         }
     }
     return count;
+}
+
+/**
+ * Active Alerts Persistence
+ */
+export async function addActiveAlert(chatId, messageId, locationUid, baseText) {
+    try {
+        await pool.execute(
+            'INSERT INTO active_alerts (chat_id, message_id, location_uid, base_text) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE message_id = ?, base_text = ?',
+            [chatId, messageId, locationUid, baseText, messageId, baseText]
+        );
+    } catch (e) {
+        console.error('DB Error (addActiveAlert):', e.message);
+    }
+}
+
+export async function removeActiveAlert(chatId) {
+    try {
+        await pool.execute('DELETE FROM active_alerts WHERE chat_id = ?', [chatId]);
+    } catch (e) {
+        console.error('DB Error (removeActiveAlert):', e.message);
+    }
+}
+
+export async function getAllActiveAlerts() {
+    try {
+        const [rows] = await pool.execute('SELECT * FROM active_alerts');
+        return rows;
+    } catch (e) {
+        console.error('DB Error (getAllActiveAlerts):', e.message);
+        return [];
+    }
 }
 
 export { pool };

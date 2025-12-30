@@ -1,6 +1,6 @@
 {
   "name": "alerts-bot",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "notify from red alert",
   "main": "server.js",
   "type": "module",
