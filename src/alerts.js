@@ -87,9 +87,15 @@ export function getCountrySummary(alerts) {
     const threatTypes = {};
 
     for (const a of alerts) {
-        if (a.location_type === 'oblast') {
+        // Use location_oblast field which contains oblast NAME for any alert type
+        // (works for raions, hromadas, cities - they all have location_oblast)
+        if (a.location_oblast) {
+            alertedOblasts.add(a.location_oblast);
+        } else if (a.location_type === 'oblast') {
+            // Fallback: if no location_oblast but type is oblast, use title
             alertedOblasts.add(a.location_title);
         }
+
         const type = a.alert_type || 'air_raid';
         threatTypes[type] = (threatTypes[type] || 0) + 1;
     }
@@ -148,7 +154,13 @@ export function translateAlertType(type) {
         'artillery_shelling': '💥 Артобстріл',
         'urban_fights': '⚔️ Вуличні бої',
         'nuclear': '☢️ Хімічна/ядерна загроза',
-        'chemical': '☣️ Хімічна загроза'
+        'chemical': '☣️ Хімічна загроза',
+        'ballistics': '🚀 Загроза балістики',
+        'strategic_aviation': '✈️ Стратегічна авіація',
+        'mig_takeoff': '🛫 Зліт МіГ-31К',
+        'mig_rockets': '🚀 Ракета з МіГ-31К',
+        'tactical_rockets': '🚀 Тактична авіація',
+        'boats': '⛴️ Загроза з моря'
     };
     return types[type] || `⚠️ ${type}`;
 }

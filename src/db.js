@@ -165,11 +165,11 @@ export async function migrateHistoryFromJson(jsonData) {
 /**
  * Active Alerts Persistence
  */
-export async function addActiveAlert(chatId, messageId, locationUid, baseText) {
+export async function addActiveAlert(chatId, messageId, locationUid, locationName, baseText) {
     try {
         await pool.execute(
-            'INSERT INTO active_alerts (chat_id, message_id, location_uid, base_text) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE message_id = ?, base_text = ?',
-            [chatId, messageId, locationUid, baseText, messageId, baseText]
+            'INSERT INTO active_alerts (chat_id, message_id, location_uid, location_name, base_text) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE message_id = ?, location_name = ?, base_text = ?',
+            [chatId, messageId, locationUid, locationName, baseText, messageId, locationName, baseText]
         );
     } catch (e) {
         console.error('DB Error (addActiveAlert):', e.message);

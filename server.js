@@ -26,8 +26,9 @@ import {
     getCountrySummary, getAlertSummary, translateAlertType
 } from './src/alerts.js';
 import { fetchWeather, getLocationCoords } from './src/weather.js';
-import { getRfAlertsString, getGlobalThreats } from './src/rf_alerts.js';
+import { getRfAlertsString, getGlobalThreats, getUaAlertsOblasts } from './src/rf_alerts.js';
 import { initUpdater, trackAlertMessage, stopTracking } from './src/message_updater.js';
+import { buildAlertMessage } from './src/alert_generator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,7 +62,7 @@ bot.on('polling_error', (error) => log(`[Polling Error] ${error.code}: ${error.m
 bot.on('error', (error) => log(`[Bot Error] ${error.message}`));
 
 // === Status Auto-Update Tracking ===
-const statusTrackers = new Map(); // chatId -> { messageId, intervalId, lastRefresh, lastStatus }
+const statusTrackers = new Map(); // chatId -> { messageId, intervalId, lastRefresh, lastStatus, autoEnabled }
 const RATE_LIMIT_MS = 20000;      // 20 sec between manual refreshes
 const AUTO_UPDATE_MS = 45000;     // 45 sec auto-update
 
@@ -325,24 +326,33 @@ const handleUnsubscribe = async (msg) => {
 bot.onText(/\/unsubscribe/, handleUnsubscribe);
 
 // /status handler with inline refresh button
-async function buildStatusText(chatId, includeFooter = true) {
+async function buildStatusText(chatId, { includeFooter = true, autoEnabled = false } = {}) {
     const alerts = await fetchAlerts();
     const subs = await loadSubscribers();
     const sub = subs[chatId];
     const country = getCountrySummary(alerts);
     const now = new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+    // Get accurate oblast count from ukrainealarm API
+    const uaOblasts = await getUaAlertsOblasts();
+    const oblastCount = uaOblasts?.count || country.oblastCount;
+    const oblastNames = uaOblasts?.names || country.oblasts;
+
     let text = `📊 <b>Статус тривог</b>\n`;
     text += `━━━━━━━━━━━━━━━\n\n`;
 
     let currentStatus = 'safe'; // Track for status change detection
+    let userRegionAlert = false; // Track if user's specific region has alert
 
-    if (country.oblastCount > 0) {
-        text += `🔴 <b>Тривога в ${country.oblastCount} областях:</b>\n`;
-        const shortNames = country.oblasts.map(o => o.replace(' область', ''));
-        text += `📋 ${shortNames.join(', ')}`;
-        if (country.hasMore) text += ` +ще`;
-        text += `\n\n`;
+    if (oblastCount > 0) {
+        text += `🔴 <b>Тривога в ${oblastCount} областях:</b>\n`;
+        // Show ALL oblasts, 3 per line
+        const shortNames = oblastNames.map(o => o.replace(' область', ''));
+        for (let i = 0; i < shortNames.length; i += 3) {
+            const row = shortNames.slice(i, i + 3);
+            text += `📋 ${row.join(', ')}\n`;
+        }
+        text += `\n`;
 
         if (Object.keys(country.threats).length > 0) {
             text += `<b>⚠️ Типи загроз:</b>\n`;
@@ -362,6 +372,7 @@ async function buildStatusText(chatId, includeFooter = true) {
         const subLocation = LOCATIONS.find(l => l.uid.toString() === sub.locationUid.toString());
         const subOblastUid = subLocation?.oblastUid || subLocation?.uid;
         const isActive = isAlertActive(alerts, sub.locationUid) || isAlertActive(alerts, subOblastUid);
+        userRegionAlert = isActive;
 
         if (isActive) {
             currentStatus = 'alert';
@@ -396,13 +407,24 @@ async function buildStatusText(chatId, includeFooter = true) {
         }
     }
 
-    if (includeFooter) {
+    // Add RF alerts info - тривога у орків! 🔥
+    const rfInfoText = await getRfAlertsString();
+    if (rfInfoText) {
         text += `\n━━━━━━━━━━━━━━━\n`;
-        text += `� Оновлено: ${now}\n`;
-        text += `⏱️ Авто-оновлення: 45с`;
+        text += `${rfInfoText}\n`;
     }
 
-    return { text, currentStatus };
+    if (includeFooter) {
+        text += `\n━━━━━━━━━━━━━━━\n`;
+        text += `🔄 Оновлено: ${now}\n`;
+        if (autoEnabled) {
+            text += `⏱️ Авто-оновлення: ✅ кожні 45с`;
+        } else {
+            text += `⏱️ Авто-оновлення: ⏸️ вимкнено`;
+        }
+    }
+
+    return { text, currentStatus, userRegionAlert };
 }
 
 const handleStatus = async (msg) => {
@@ -414,11 +436,14 @@ const handleStatus = async (msg) => {
         clearInterval(existing.intervalId);
     }
 
-    const { text, currentStatus } = await buildStatusText(chatId);
+    // Auto-update OFF by default
+    const autoEnabled = false;
+    const { text, currentStatus, userRegionAlert } = await buildStatusText(chatId, { autoEnabled });
 
     const keyboard = {
         inline_keyboard: [[
-            { text: '� Оновити', callback_data: 'refresh_status' }
+            { text: '🔄 Оновити', callback_data: 'refresh_status' },
+            { text: '▶️ Авто', callback_data: 'toggle_auto_status' }
         ]]
     };
 
@@ -427,28 +452,54 @@ const handleStatus = async (msg) => {
         reply_markup: keyboard
     });
 
-    // Start auto-update interval
+    statusTrackers.set(chatId, {
+        messageId: sent.message_id,
+        intervalId: null,
+        lastRefresh: Date.now(),
+        lastStatus: currentStatus,
+        autoEnabled: false
+    });
+};
+bot.onText(/\/status/, handleStatus);
+
+// Helper: Build keyboard based on auto state
+function getStatusKeyboard(autoEnabled) {
+    return {
+        inline_keyboard: [[
+            { text: '🔄 Оновити', callback_data: 'refresh_status' },
+            { text: autoEnabled ? '⏸️ Стоп' : '▶️ Авто', callback_data: 'toggle_auto_status' }
+        ]]
+    };
+}
+
+// Helper: Start auto-update interval
+function startAutoUpdate(chatId, messageId) {
     const intervalId = setInterval(async () => {
         try {
             const tracker = statusTrackers.get(chatId);
-            if (!tracker) {
+            if (!tracker || !tracker.autoEnabled) {
                 clearInterval(intervalId);
                 return;
             }
 
-            const { text: newText, currentStatus: newStatus } = await buildStatusText(chatId);
+            const { text: newText, currentStatus: newStatus, userRegionAlert } = await buildStatusText(chatId, { autoEnabled: true });
+            const keyboard = getStatusKeyboard(true);
 
-            // Check if status changed - stop auto-update
-            if (tracker.lastStatus && tracker.lastStatus !== newStatus) {
+            // Auto-stop when user's region alert ends (was alert -> now safe)
+            if (tracker.lastStatus === 'alert' && newStatus === 'safe') {
                 clearInterval(intervalId);
-                const finalText = newText + `\n\n🔔 <b>Статус змінився!</b> Авто-оновлення зупинено.`;
-                await bot.editMessageText(finalText, {
+                tracker.autoEnabled = false;
+                tracker.intervalId = null;
+
+                const finalText = newText.replace('⏱️ Авто-оновлення: ✅ кожні 45с', '⏱️ Авто-оновлення: ⏸️ вимкнено');
+                const finalKeyboard = getStatusKeyboard(false);
+
+                await bot.editMessageText(finalText + `\n\n🔔 <b>Відбій!</b> Авто-оновлення зупинено.`, {
                     chat_id: chatId,
                     message_id: tracker.messageId,
                     parse_mode: 'HTML',
-                    reply_markup: keyboard
+                    reply_markup: finalKeyboard
                 });
-                statusTrackers.delete(chatId);
                 return;
             }
 
@@ -461,63 +512,101 @@ const handleStatus = async (msg) => {
             });
         } catch (e) {
             // Message might be deleted or too old
-            clearInterval(intervalId);
+            const tracker = statusTrackers.get(chatId);
+            if (tracker?.intervalId) clearInterval(tracker.intervalId);
             statusTrackers.delete(chatId);
         }
     }, AUTO_UPDATE_MS);
 
-    statusTrackers.set(chatId, {
-        messageId: sent.message_id,
-        intervalId,
-        lastRefresh: Date.now(),
-        lastStatus: currentStatus
-    });
-};
-bot.onText(/\/status/, handleStatus);
+    return intervalId;
+}
 
 // Handle refresh button callback
 bot.on('callback_query', async (query) => {
-    if (query.data !== 'refresh_status') return;
+    if (query.data !== 'refresh_status' && query.data !== 'toggle_auto_status') return;
 
     const chatId = query.message.chat.id;
     const messageId = query.message.message_id;
-    const tracker = statusTrackers.get(chatId);
+    let tracker = statusTrackers.get(chatId);
 
-    // Rate limiting
-    if (tracker?.lastRefresh && Date.now() - tracker.lastRefresh < RATE_LIMIT_MS) {
-        const waitSec = Math.ceil((RATE_LIMIT_MS - (Date.now() - tracker.lastRefresh)) / 1000);
-        await bot.answerCallbackQuery(query.id, {
-            text: `⏳ Зачекай ${waitSec} сек перед наступним оновленням`,
-            show_alert: false
-        });
+    // Create tracker if not exists (e.g., old message)
+    if (!tracker) {
+        tracker = {
+            messageId,
+            intervalId: null,
+            lastRefresh: 0,
+            lastStatus: 'safe',
+            autoEnabled: false
+        };
+        statusTrackers.set(chatId, tracker);
+    }
+
+    // Handle toggle auto-update
+    if (query.data === 'toggle_auto_status') {
+        tracker.autoEnabled = !tracker.autoEnabled;
+
+        if (tracker.autoEnabled) {
+            // Start auto-update
+            tracker.intervalId = startAutoUpdate(chatId, messageId);
+            await bot.answerCallbackQuery(query.id, { text: '▶️ Авто-оновлення увімкнено!' });
+        } else {
+            // Stop auto-update
+            if (tracker.intervalId) {
+                clearInterval(tracker.intervalId);
+                tracker.intervalId = null;
+            }
+            await bot.answerCallbackQuery(query.id, { text: '⏸️ Авто-оновлення вимкнено!' });
+        }
+
+        // Refresh with new state
+        try {
+            const { text, currentStatus } = await buildStatusText(chatId, { autoEnabled: tracker.autoEnabled });
+            const keyboard = getStatusKeyboard(tracker.autoEnabled);
+
+            await bot.editMessageText(text, {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+            tracker.lastStatus = currentStatus;
+            tracker.lastRefresh = Date.now();
+        } catch (e) {
+            // Ignore edit errors
+        }
         return;
     }
 
-    try {
-        const { text, currentStatus } = await buildStatusText(chatId);
-
-        const keyboard = {
-            inline_keyboard: [[
-                { text: '🔄 Оновити', callback_data: 'refresh_status' }
-            ]]
-        };
-
-        await bot.editMessageText(text, {
-            chat_id: chatId,
-            message_id: messageId,
-            parse_mode: 'HTML',
-            reply_markup: keyboard
-        });
-
-        // Update tracker
-        if (tracker) {
-            tracker.lastRefresh = Date.now();
-            tracker.lastStatus = currentStatus;
+    // Handle manual refresh
+    if (query.data === 'refresh_status') {
+        // Rate limiting
+        if (tracker.lastRefresh && Date.now() - tracker.lastRefresh < RATE_LIMIT_MS) {
+            const waitSec = Math.ceil((RATE_LIMIT_MS - (Date.now() - tracker.lastRefresh)) / 1000);
+            await bot.answerCallbackQuery(query.id, {
+                text: `⏳ Зачекай ${waitSec} сек перед наступним оновленням`,
+                show_alert: false
+            });
+            return;
         }
 
-        await bot.answerCallbackQuery(query.id, { text: '✅ Оновлено!' });
-    } catch (e) {
-        await bot.answerCallbackQuery(query.id, { text: '❌ Помилка оновлення' });
+        try {
+            const { text, currentStatus } = await buildStatusText(chatId, { autoEnabled: tracker.autoEnabled });
+            const keyboard = getStatusKeyboard(tracker.autoEnabled);
+
+            await bot.editMessageText(text, {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+
+            tracker.lastRefresh = Date.now();
+            tracker.lastStatus = currentStatus;
+
+            await bot.answerCallbackQuery(query.id, { text: '✅ Оновлено!' });
+        } catch (e) {
+            await bot.answerCallbackQuery(query.id, { text: '❌ Помилка оновлення' });
+        }
     }
 });
 
@@ -594,120 +683,31 @@ async function checkAlertsForSubscribers() {
             await updateSubscriberAlertState(chatId, isActive);
             sub.lastAlertState = isActive;
 
-            const coords = getLocationCoords(sub.locationUid);
-            const weather = await fetchWeather(coords.lat, coords.lon);
-            const country = getCountrySummary(alerts);
-            const summary = getAlertSummary(alerts, sub.locationUid);
-
-            // Merge global threats
-            const globalThreats = await getGlobalThreats();
-            if (globalThreats.ballistics) summary.types['ballistics'] = true;
-            if (globalThreats.strategic_aviation) summary.types['strategic_aviation'] = true;
-            if (globalThreats.mig_takeoff) summary.types['mig_takeoff'] = true;
-            if (globalThreats.mig_rockets) summary.types['mig_rockets'] = true;
-            if (globalThreats.artillery) summary.types['artillery'] = true;
-            if (globalThreats.boats) summary.types['boats'] = true;
-            if (globalThreats.tactical_rockets) summary.types['tactical_rockets'] = true;
-
-            let text = '';
-            let baseText = '';
-
-            if (isActive) {
-
-                text = `🔴 <b>ТРИВОГА!</b>\n`;
-                text += `━━━━━━━━━━━━━━━\n`;
-                text += `📍 <b>${sub.locationName}</b>\n\n`;
-
-                if (Object.keys(summary.types).length > 0) {
-                    text += `<b>⚠️ Загрози:</b>\n`;
-                    for (const [type] of Object.entries(summary.types)) {
-                        text += `  ${translateAlertType(type)}\n`;
-                    }
-                    text += `\n`;
-                }
-
-                if (summary.raions.length > 0) {
-                    text += `<b>📌 Райони:</b> ${summary.raions.join(', ')}`;
-                    if (summary.hasMore) text += ` +ще`;
-                    text += `\n\n`;
-                }
-
-                if (country.oblastCount > 0) {
-                    text += `━━━━━━━━━━━━━━━\n`;
-                    text += `<b>🇺🇦 В тривозі:</b> ${country.oblastCount} обл.\n`;
-                    if (country.oblasts.length > 0) {
-                        const shortNames = country.oblasts.map(o => o.replace(' область', ''));
-                        text += `📋 ${shortNames.join(', ')}\n`;
-                    }
-                    text += `\n`;
-                }
-
-                if (weather) {
-                    text += `<b>🌤️ Погода в ${coords.city}:</b>\n`;
-                    text += `${weather.icon} ${weather.desc}\n`;
-                    text += `🌡️ <b>${weather.temp}°C</b> (відчув. ${weather.feels}°C)\n`;
-                    text += `💨 Вітер: ${weather.wind} м/с ${weather.windDir}\n`;
-                    text += `💧 Вологість: ${weather.humidity}%\n`;
-                    text += `📊 Тиск: ${weather.pressure} гПа\n\n`;
-                }
-
-                text += `🚨 <b>Негайно в укриття!</b>`;
-                baseText = text;
-                const rfText = await getRfAlertsString();
-                if (rfText) text += `\n\n${rfText}`;
-
-
-
-            } else {
-                text = `🟢 <b>Відбій тривоги</b>\n`;
-                text += `━━━━━━━━━━━━━━━\n`;
-                text += `📍 <b>${sub.locationName}</b>\n\n`;
-
-                text += `✅ <b>Можна виходити</b> 😊\n\n`;
-
-                if (weather) {
-                    text += `<b>🌤️ Погода в ${coords.city}:</b>\n`;
-                    text += `${weather.icon} ${weather.desc}\n`;
-                    text += `🌡️ <b>${weather.temp}°C</b> (відчув. ${weather.feels}°C)\n`;
-                    text += `💨 Вітер: ${weather.wind} м/с ${weather.windDir}\n\n`;
-                }
-
-                if (country.oblastCount > 0) {
-                    text += `━━━━━━━━━━━━━━━\n`;
-                    text += `<b>🇺🇦 Ще в тривозі:</b> ${country.oblastCount} обл.\n`;
-                    if (country.oblasts.length > 0) {
-                        const shortNames = country.oblasts.map(o => o.replace(' область', ''));
-                        text += `📋 ${shortNames.join(', ')}`;
-                    }
-                }
-            }
-
+            // IMPORTANT: If alert ended, stop tracking BEFORE sending new message
+            // This prevents race condition where runUpdates() updates old message
             if (!isActive) {
-                baseText = text;
-                const rfText = await getRfAlertsString();
-                if (rfText) text += `\n\n${rfText}`;
+                stopTracking(chatId);
+                await removeActiveAlert(chatId);
             }
+
+            // Generate message using shared builder
+            const text = await buildAlertMessage(sub.locationUid, sub.locationName, alerts);
             const imagePath = getRandomImage(isActive);
 
             try {
                 const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
-                log(`Alert sent to ${chatId}: ${isActive ? 'START' : 'END'}`);
+                log(`Subscriber alert to ${chatId}: ${isActive ? 'START' : 'END'}`);
 
+                // Only track new alerts (not all-clear messages)
                 if (isActive) {
-                    trackAlertMessage(chatId, sentMsg.message_id, baseText);
-                    await addActiveAlert(chatId, sentMsg.message_id, sub.locationUid, baseText);
-                } else {
-                    stopTracking(chatId);
-                    await removeActiveAlert(chatId);
-                }
+                    trackAlertMessage(chatId, sentMsg.message_id, sub.locationUid, sub.locationName);
 
-            } catch (e) {
-                log(`Send failed: ${e.message}`);
-                try {
-                    await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
-                } catch (err) {
-                    log(`Fallback failed: ${err.message}`);
+                    // Update active alerts persistence
+                    await addActiveAlert(chatId, sentMsg.message_id, sub.locationUid, sub.locationName, text);
                 }
+            } catch (e) {
+                log(`Subscriber alert failed for ${chatId}: ${e.message}`);
+                // ignore block errors for now
             }
         }
     }
@@ -737,95 +737,11 @@ async function broadcastToGroups() {
     if (broadcastState[targetUid] !== isActive) {
         broadcastState[targetUid] = isActive;
 
-        const coords = getLocationCoords(targetUid);
-        const weather = await fetchWeather(coords.lat, coords.lon);
-        const country = getCountrySummary(alerts);
-        const summary = getAlertSummary(alerts, targetUid);
+        // Generate message text using shared builder
+        const text = await buildAlertMessage(targetUid, targetName, alerts);
 
-        // Merge global threats
-        const globalThreats = await getGlobalThreats();
-        if (globalThreats.ballistics) summary.types['ballistics'] = true;
-        if (globalThreats.strategic_aviation) summary.types['strategic_aviation'] = true;
-        if (globalThreats.mig_takeoff) summary.types['mig_takeoff'] = true;
-        if (globalThreats.mig_rockets) summary.types['mig_rockets'] = true;
-        if (globalThreats.artillery) summary.types['artillery'] = true;
-        if (globalThreats.boats) summary.types['boats'] = true;
-        if (globalThreats.tactical_rockets) summary.types['tactical_rockets'] = true;
+        // Note: isActive is already calculated at line 635, no need to re-check
 
-        let text = '';
-        let baseText = '';
-
-        if (isActive) {
-            text = `🔴 <b>ТРИВОГА!</b>\n`;
-            text += `━━━━━━━━━━━━━━━\n`;
-            text += `📍 <b>${targetName}</b>\n\n`;
-
-            if (Object.keys(summary.types).length > 0) {
-                text += `<b>⚠️ Загрози:</b>\n`;
-                for (const [type] of Object.entries(summary.types)) {
-                    text += `  ${translateAlertType(type)}\n`;
-                }
-                text += `\n`;
-            }
-
-            if (summary.raions.length > 0) {
-                text += `<b>📌 Райони:</b> ${summary.raions.join(', ')}`;
-                if (summary.hasMore) text += ` +ще`;
-                text += `\n\n`;
-            }
-
-            if (country.oblastCount > 0) {
-                text += `━━━━━━━━━━━━━━━\n`;
-                text += `<b>🇺🇦 В тривозі:</b> ${country.oblastCount} обл.\n`;
-                if (country.oblasts.length > 0) {
-                    const shortNames = country.oblasts.map(o => o.replace(' область', ''));
-                    text += `📋 ${shortNames.join(', ')}\n`;
-                }
-                text += `\n`;
-            }
-
-            if (weather) {
-                text += `<b>🌤️ Погода в ${coords.city}:</b>\n`;
-                text += `${weather.icon} ${weather.desc}\n`;
-                text += `🌡️ <b>${weather.temp}°C</b> (відчув. ${weather.feels}°C)\n`;
-                text += `💨 Вітер: ${weather.wind} м/с ${weather.windDir}\n`;
-                text += `💧 Вологість: ${weather.humidity}%\n`;
-                text += `📊 Тиск: ${weather.pressure} гПа\n\n`;
-            }
-
-            text += `🚨 <b>Негайно в укриття!</b>`;
-            baseText = text;
-            const rfStartText = await getRfAlertsString();
-            if (rfStartText) text += `\n\n${rfStartText}`;
-        } else {
-            text = `🟢 <b>Відбій тривоги</b>\n`;
-            text += `━━━━━━━━━━━━━━━\n`;
-            text += `📍 <b>${targetName}</b>\n\n`;
-
-            text += `✅ <b>Можна виходити</b> 😊\n\n`;
-
-            if (weather) {
-                text += `<b>🌤️ Погода в ${coords.city}:</b>\n`;
-                text += `${weather.icon} ${weather.desc}\n`;
-                text += `🌡️ <b>${weather.temp}°C</b> (відчув. ${weather.feels}°C)\n`;
-                text += `💨 Вітер: ${weather.wind} м/с ${weather.windDir}\n\n`;
-            }
-
-            if (country.oblastCount > 0) {
-                text += `━━━━━━━━━━━━━━━\n`;
-                text += `<b>🇺🇦 Ще в тривозі:</b> ${country.oblastCount} обл.\n`;
-                if (country.oblasts.length > 0) {
-                    const shortNames = country.oblasts.map(o => o.replace(' область', ''));
-                    text += `📋 ${shortNames.join(', ')}`;
-                }
-            }
-        }
-
-        if (!isActive) {
-            baseText = text;
-            const rfText = await getRfAlertsString();
-            if (rfText) text += `\n\n${rfText}`;
-        }
         const imagePath = getRandomImage(isActive);
 
         // Get subscriber chat IDs to avoid duplicates
@@ -839,16 +755,21 @@ async function broadcastToGroups() {
                 continue;
             }
 
+            // IMPORTANT: If alert ended, stop tracking BEFORE sending new message
+            // This prevents race condition where runUpdates() updates old message
+            if (!isActive) {
+                stopTracking(chatId);
+                await removeActiveAlert(chatId);
+            }
+
             try {
                 const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
                 log(`Broadcast to ${chatId}: ${isActive ? 'ALERT' : 'END'}`);
 
+                // Only track new alerts (not all-clear messages)
                 if (isActive) {
-                    trackAlertMessage(chatId, sentMsg.message_id, baseText);
-                    await addActiveAlert(chatId, sentMsg.message_id, targetUid, baseText);
-                } else {
-                    stopTracking(chatId);
-                    await removeActiveAlert(chatId);
+                    trackAlertMessage(chatId, sentMsg.message_id, targetUid, targetName);
+                    await addActiveAlert(chatId, sentMsg.message_id, targetUid, targetName, text);
                 }
             } catch (e) {
                 log(`Broadcast failed: ${e.message}`);
@@ -858,6 +779,13 @@ async function broadcastToGroups() {
         }
 
         // Save to database with extended data (once per state change)
+        // Fetch data for history logging
+        const coords = getLocationCoords(targetUid);
+        const weather = await fetchWeather(coords.lat, coords.lon);
+        const country = getCountrySummary(alerts);
+        const summary = getAlertSummary(alerts, targetUid);
+        const rfInfoText = await getRfAlertsString();
+
         await saveAlertHistory({
             locationUid: targetUid,
             locationName: targetName,
@@ -868,48 +796,12 @@ async function broadcastToGroups() {
             weatherIcon: weather?.icon || null,
             raions: summary.raions.join(', ') || null,
             countryCount: country.oblastCount || null,
-            rfInfo: rfText || null,
+            rfInfo: rfInfoText || null,
             countryInfo: country.oblastCount > 0 ? country.oblasts.map(o => o.replace(' область', '')).join(', ') : null
         });
     }
 }
 
-// =====================
-// RESTORE ACTIVE ALERTS
-// =====================
-async function restoreActiveAlerts() {
-    log('🔄 Restoring active alerts...');
-    const activeRecords = await getAllActiveAlerts();
-    const alerts = await fetchAlerts();
-
-    for (const record of activeRecords) {
-        const isActive = isAlertActive(alerts, record.location_uid);
-
-        if (isActive) {
-            log(`Re-tracking alert for ${record.chat_id}`);
-            trackAlertMessage(record.chat_id, record.message_id, record.base_text);
-        } else {
-            log(`Alert finished while offline for ${record.chat_id}. Performing final update.`);
-
-            // Final update with latest RF info
-            const rfText = await getRfAlertsString();
-            let finalText = record.base_text;
-            if (rfText) finalText += `\n\n${rfText}`;
-
-            try {
-                await bot.editMessageCaption(finalText, {
-                    chat_id: record.chat_id,
-                    message_id: record.message_id,
-                    parse_mode: 'HTML'
-                });
-            } catch (e) {
-                log(`Final update failed for ${record.chat_id}: ${e.message}`);
-            }
-
-            await removeActiveAlert(record.chat_id);
-        }
-    }
-}
 
 // Check every 30 seconds
 setInterval(checkAlertsForSubscribers, 30000);
@@ -945,6 +837,24 @@ function startTrayIndicator() {
         log(`🎯 Tray indicator launched`);
     } catch (e) {
         log(`❌ Failed to start tray: ${e.message}`);
+    }
+}
+
+// =====================
+// RESTORE ACTIVE ALERTS ON RESTART
+// =====================
+async function restoreActiveAlerts() {
+    log('🔄 Restoring active alerts...');
+    try {
+        const activeAlerts = await getAllActiveAlerts();
+        for (const alert of activeAlerts) {
+            // Use DB stored location_name, fallback to LOCATIONS lookup
+            const locName = alert.location_name || LOCATIONS.find(l => l.uid.toString() === alert.location_uid.toString())?.name || 'Невідома область';
+            trackAlertMessage(alert.chat_id, alert.message_id, alert.location_uid, locName);
+        }
+        log(`✅ Restored ${activeAlerts.length} active alerts for live updates`);
+    } catch (e) {
+        log(`❌ Failed to restore alerts: ${e.message}`);
     }
 }
 

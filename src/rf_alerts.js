@@ -44,6 +44,81 @@ async function getToken() {
     }
 }
 
+/**
+ * Get Ukrainian oblasts in alert from ukrainealarm API
+ * This is more accurate than alerts.in.ua for oblast count
+ * Returns array of oblast names with ACTIVE alerts
+ */
+export async function getUaAlertsOblasts() {
+    try {
+        const token = await getToken();
+        if (!token) return null;
+
+        const { data } = await fetchUrl('https://map.ukrainealarm.com/api/v2/data/mapUpdate', {
+            'Authorization': `Bearer ${token}`,
+            'Referer': 'https://map.ukrainealarm.com/',
+            'Accept': 'application/json'
+        });
+
+        const json = JSON.parse(data);
+
+        // json.alerts contains ACTIVE alerts grouped by region
+        // regionType: 'State' = oblast, 'District' = raion, 'Community' = hromada
+        if (!json.alerts) return null;
+
+        // Collect unique oblasts from:
+        // 1. Direct State alerts
+        // 2. Parent oblasts of District/Community alerts (via parentRegionId lookup)
+        const oblasts = new Set();
+        const oblastIdToName = new Map();
+
+        // First pass: collect State (oblast) alerts
+        for (const alert of json.alerts) {
+            if (alert.regionType === 'State') {
+                oblasts.add(alert.regionName);
+                oblastIdToName.set(alert.regionId, alert.regionName);
+            }
+        }
+
+        // Second pass: for District/Community, find parent oblast from statesHistory
+        // Build oblast ID -> name map from statesHistory (entries without parentRegionId)
+        if (json.statesHistory) {
+            for (const state of json.statesHistory) {
+                if (!state.parentRegionId) {
+                    oblastIdToName.set(state.regionId, state.regionName);
+                }
+            }
+        }
+
+        // Now check districts/communities and add their parent oblasts
+        for (const alert of json.alerts) {
+            if (alert.regionType === 'District' || alert.regionType === 'Community') {
+                // Check if we can determine parent oblast
+                // statesHistory entries have parentRegionId for districts
+                if (json.statesHistory) {
+                    for (const state of json.statesHistory) {
+                        if (state.regionId === alert.regionId && state.parentRegionId) {
+                            const parentName = oblastIdToName.get(state.parentRegionId);
+                            if (parentName) {
+                                oblasts.add(parentName);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        return {
+            count: oblasts.size,
+            names: [...oblasts]
+        };
+    } catch (e) {
+        console.error('❌ Error fetching UA alerts oblasts:', e.message);
+        return null;
+    }
+}
+
 export async function getRfAlerts() {
     try {
         const token = await getToken();
@@ -129,19 +204,135 @@ export async function getRfAlertsString() {
 
     const names = active.map(a => a.name).join(', ');
 
-    // Fun random phrases
-    const phrases = [
+    // Fun random phrases with dynamic elements
+    const hour = new Date().getHours();
+    const isNight = hour >= 22 || hour < 6;
+    const isDawn = hour >= 6 && hour < 9;
+    const isDay = hour >= 9 && hour < 18;
+
+    // Base phrases (always available) - АГРЕСИВНІ!
+    const basePhrases = [
         "🔥 Кошмарим підарів в:",
-        "🤮 Болота тонуть в:",
         "💩 Русня потєрпає в:",
-        "☠️ Бєлгород спиш?",
-        "💥 Бавовна розквітає в:",
-        "🛸 НЛО атакує:",
-        "🦟 Бойові комарі працюють по:",
-        "🚬 Куріння вбиває в:",
-        "👹 Сатана пече млинці в:",
-        "🎪 Цирк уїхав, клоуни лишились в:"
+        "🐷 Свині горять в:",
+        "☠️ Орки здихають в:",
+        "💥 Бавовна накриває кацапів в:",
+        "🤮 Рашисти обісрались в:",
+        "🦠 Окупанти гниють в:",
+        "👹 Нелюді панікують в:",
+        "🐀 Пацюки тікають в:",
+        "🚀 Калібр для орків прилетів в:",
+        "💀 Кацапня йде на три букви в:",
+        "🔪 Бандера різає русню в:",
+        "⚰️ Вантаж 200 формується в:",
+        "🪦 Свіжі могилки в:",
+        "🎯 Приліт по рашистах в:",
+        "🔨 ЗСУ херачить підарів в:",
+        "🧹 Зачистка від орків в:",
+        "🦟 Бойові комарі жруть кацапів в:",
+        "🐕 Собаки гризуть рашню в:",
+        "🌪️ Кацапів здуває в:",
+        "⚡ Орків підсмажує в:",
+        "🔥 Свинособаки смажаться в:",
+        "💣 Окупанти отримали люлей в:",
+        "🎪 Кацапський цирк горить в:",
+        "🤡 Орки-клоуни сцять в:",
+        "🐒 Мавпи з гранатами підривають себе в:",
+        "🦴 Орків розкидало в:",
+        "🩸 Кров окупантів ллється в:",
+        "👺 Рашистські демони валяться в:",
+        "🪓 Сікти кацапів продовжуємо в:",
+        "🏴‍☠️ Пірати топлять рашистів в:",
+        "🦅 Орли клюють орків в:",
+        "🐉 Дракон пече підарів в:",
+        "🌋 Пекло для русні в:",
+        "☢️ Радіація косить окупантів в:",
+        "🧨 Феєрверки для кацапів в:",
+        "🚁 Вертольоти мочать рашню в:",
+        "⏰ Година розплати для орків в:",
+        "🎁 Подарунок для свиней від ЗСУ в:",
+        "💀 Смерть косить рашистів в:",
+        "🐖 Хрюкальники замовкли в:",
+        "🗑️ Сміття вивозимо з:",
+        "🧟 Зомбі-орки падають в:",
+        "🔫 Денацифікація підарів в:",
+        "🎖️ Нові медалі за дохлих орків в:"
     ];
+
+    // Night-specific phrases (22:00 - 06:00) - АГРЕСИВНІ!
+    const nightPhrases = [
+        "🌙 Нічні кошмари для орків в:",
+        "🦉 Сови полюють на кацапів в:",
+        "😴 Русня не доспить в:",
+        "🌃 Нічний візит смерті до підарів в:",
+        "🕯️ Свічки на могилах орків в:",
+        "🦇 Кажани п'ють кров рашистів в:",
+        "💤 Вічний сон для окупантів в:",
+        "🌌 Зорі падають на свиней в:",
+        "👻 Привиди мстять оркам в:",
+        "🔦 Нічна зачистка кацапні в:"
+    ];
+
+    // Dawn-specific phrases (06:00 - 09:00) - АГРЕСИВНІ!
+    const dawnPhrases = [
+        "☀️ Доброго ранку, здохни, орче! Тривога в:",
+        "🐓 Півень закукурікав по рашистах в:",
+        "☕ Ранкова кава з кров'ю орків в:",
+        "🌅 Схід сонця - захід життя для кацапів в:",
+        "🥐 Снідосік для свиней - приліт в:",
+        "🍳 Яєчня з підарів готується в:",
+        "⏰ Будильник смерті для рашні в:"
+    ];
+
+    // Day-specific phrases (09:00 - 18:00) - АГРЕСИВНІ!
+    const dayPhrases = [
+        "☀️ Денна зміна мочить орків в:",
+        "🏢 Робочий день - день смерті для кацапів в:",
+        "🍳 Обідня перерва для знищення свиней в:",
+        "📊 KPI по дохлих рашистах виконано в:",
+        "💼 Ділова зустріч з підарами в пеклі в:",
+        "🔧 Ремонт орків (остаточний) в:",
+        "📈 Статистика вантажу 200 росте в:"
+    ];
+
+    // Evening-specific phrases (18:00 - 22:00) - АГРЕСИВНІ!
+    const isEvening = hour >= 18 && hour < 22;
+    const eveningPhrases = [
+        "🌆 Вечірня зачистка орків в:",
+        "🍷 Вечеря для свиней - останній раз в:",
+        "📺 Передача \"Дохлі кацапи\" йде з:",
+        "🍿 Попкорн і горілі рашисти в:",
+        "🌙 Вечір для окупантів став останнім в:",
+        "🎬 Фінальна серія для підарів в:"
+    ];
+
+    // Holiday-specific phrases (December-January - New Year vibes!) - АГРЕСИВНІ!
+    const month = new Date().getMonth(); // 0 = Jan, 11 = Dec
+    const day = new Date().getDate();
+    const isNewYearSeason = (month === 11 && day >= 20) || (month === 0 && day <= 15);
+    const holidayPhrases = [
+        "🎅 Дід Мороз приніс смерть оркам в:",
+        "🎄 Ялинка з трупами кацапів в:",
+        "🎆 Новорічний салют по рашистах в:",
+        "🥂 З Новим Роком, здохни, орче! Тривога в:",
+        "❄️ Снігуронька закопує свиней в:",
+        "🎁 Новорічний подарунок для підарів - смерть в:",
+        "⛄ Сніговик з частин окупантів в:",
+        "🧨 Новорічні HIMARS для кацапні в:",
+        "🍾 Шампанське по черепах орків в:",
+        "🎉 Новорічна вечірка в пеклі для рашні в:",
+        "🎊 Конфеті з рашистів в:",
+        "🪅 Піньята з орками в:"
+    ];
+
+    // Build phrase pool based on time of day
+    let phrases = [...basePhrases];
+    if (isNight) phrases = phrases.concat(nightPhrases);
+    if (isDawn) phrases = phrases.concat(dawnPhrases);
+    if (isDay) phrases = phrases.concat(dayPhrases);
+    if (isEvening) phrases = phrases.concat(eveningPhrases);
+    if (isNewYearSeason) phrases = phrases.concat(holidayPhrases);
+
     const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
 
     // Global Threats Logic

@@ -30,7 +30,7 @@ async function initDatabase() {
         // Use database
         await connection.query(`USE \`${DB_NAME}\``);
 
-        // Create alerts_history table
+        // Create alerts_history table with extended columns
         console.log('📋 Creating table: alerts_history');
         await connection.query(`
             CREATE TABLE IF NOT EXISTS alerts_history (
@@ -38,7 +38,14 @@ async function initDatabase() {
                 location_uid VARCHAR(10) NOT NULL,
                 location_name VARCHAR(255) NOT NULL,
                 alert_type ENUM('ALERT', 'END') NOT NULL,
-                threat_type VARCHAR(100) DEFAULT 'air_raid',
+                threat_types VARCHAR(255) DEFAULT NULL,
+                weather_temp FLOAT DEFAULT NULL,
+                weather_desc VARCHAR(100) DEFAULT NULL,
+                weather_icon VARCHAR(10) DEFAULT NULL,
+                raions TEXT DEFAULT NULL,
+                country_count INT DEFAULT NULL,
+                rf_info TEXT DEFAULT NULL,
+                country_info TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_location (location_uid),
                 INDEX idx_type (alert_type),
@@ -66,13 +73,14 @@ async function initDatabase() {
         `);
         console.log('   ✅ subscribers created\n');
 
-        // Create active_alerts table
+        // Create active_alerts table (for live message update tracking)
         console.log('🔔 Creating table: active_alerts');
         await connection.query(`
             CREATE TABLE IF NOT EXISTS active_alerts (
                 chat_id BIGINT PRIMARY KEY,
-                message_id INT,
-                location_uid VARCHAR(50),
+                message_id INT NOT NULL,
+                location_uid VARCHAR(50) NOT NULL,
+                location_name VARCHAR(255) DEFAULT NULL,
                 base_text TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
