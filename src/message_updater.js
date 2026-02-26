@@ -3,7 +3,7 @@ import { buildAlertMessage } from './alert_generator.js';
 
 let bot = null;
 const tracked = new Map(); // chatId -> { messageId, locationUid, locationName, lastSentText }
-const UPDATE_INTERVAL = 2 * 60 * 1000; // 2 minutes
+const UPDATE_INTERVAL = 60 * 1000; // 1 minute
 let intervalId = null;
 
 export function initUpdater(botInstance) {

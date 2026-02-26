@@ -31,8 +31,34 @@ Get-Process -Name "powershell", "pwsh" -ErrorAction SilentlyContinue | ForEach-O
     }
 }
 
-# Audio Setup
-$script:player = New-Object System.Windows.Media.MediaPlayer
+# Audio Setup via winmm.dll MCI (reliable MP3 playback without WPF Dispatcher issues)
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class MciPlayer {
+    [DllImport("winmm.dll", CharSet = CharSet.Auto)]
+    public static extern int mciSendString(string command, System.Text.StringBuilder returnString, int returnLength, IntPtr hwndCallback);
+    
+    private static int aliasCounter = 0;
+    private static string currentAlias = null;
+
+    public static void Play(string filePath) {
+        Stop();
+        aliasCounter++;
+        currentAlias = "sound" + aliasCounter;
+        mciSendString("open \"" + filePath + "\" type mpegvideo alias " + currentAlias, null, 0, IntPtr.Zero);
+        mciSendString("play " + currentAlias + " notify", null, 0, IntPtr.Zero);
+    }
+    
+    public static void Stop() {
+        if (currentAlias != null) {
+            mciSendString("stop " + currentAlias, null, 0, IntPtr.Zero);
+            mciSendString("close " + currentAlias, null, 0, IntPtr.Zero);
+            currentAlias = null;
+        }
+    }
+}
+"@ -ErrorAction SilentlyContinue
 
 function Play-HappyMelody {
     try {
@@ -50,23 +76,21 @@ function Play-AlertSound($type) {
         if ($type -eq "ALERT") {
             $soundPath = Join-Path $scriptDir "media\sounds\air-alert.mp3"
             if (Test-Path $soundPath) {
-                $script:player.Open((New-Object System.Uri($soundPath)))
-                $script:player.Play()
+                [MciPlayer]::Play($soundPath)
             }
             else { [void][System.Media.SystemSounds]::Exclamation.Play() }
         }
         else {
-            # Alert End - Happy Sound + Official Voice MP3
-            $script:player.Stop()
-            
+            # Alert End - Stop alert sound, play Happy Melody + All Clear
+            [MciPlayer]::Stop()
+
             # 1. Cheerful Arpeggio
             Play-HappyMelody
-            
+
             # 2. Play the official "All Clear" voice MP3
             $clearPath = Join-Path $scriptDir "media\sounds\air-clear.mp3"
             if (Test-Path $clearPath) {
-                $script:player.Open((New-Object System.Uri($clearPath)))
-                $script:player.Play()
+                [MciPlayer]::Play($clearPath)
             }
         }
     }

@@ -7,6 +7,9 @@
  * - Auto-alerts to subscribers
  */
 
+// Set Console Title
+process.stdout.write('\x1b]2;Alerts Bot\x1b\x5c');
+
 import express from 'express';
 import TelegramBot from 'node-telegram-bot-api';
 import path from 'path';
@@ -822,19 +825,34 @@ function startTrayIndicator() {
     }
 
     try {
-        // Use Start-Process to launch in proper GUI context
-        const ps = spawn('powershell.exe', [
+        // Step 1: Kill any existing AlertFloat processes
+        const killer = spawn('powershell.exe', [
             '-ExecutionPolicy', 'Bypass',
             '-Command',
-            `Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -File "${scriptPath}"' -WindowStyle Hidden`
-        ], {
-            shell: true,
-            detached: true,
-            stdio: 'ignore'
-        });
+            `Get-Process -Name "powershell","pwsh" -ErrorAction SilentlyContinue | ForEach-Object { try { $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)" -ErrorAction SilentlyContinue).CommandLine; if ($cmd -match "AlertFloat") { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } } catch {} }`
+        ], { shell: true, detached: true, stdio: 'ignore' });
+        killer.unref();
+        log(`🔪 Killing old AlertFloat instances...`);
 
-        ps.unref();
-        log(`🎯 Tray indicator launched`);
+        // Step 2: Launch new instance after old one is dead
+        setTimeout(() => {
+            try {
+                const ps = spawn('powershell.exe', [
+                    '-ExecutionPolicy', 'Bypass',
+                    '-Command',
+                    `Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -File "${scriptPath}"' -WindowStyle Hidden`
+                ], {
+                    shell: true,
+                    detached: true,
+                    stdio: 'ignore'
+                });
+                ps.unref();
+                log(`🎯 Tray indicator launched`);
+            } catch (e) {
+                log(`❌ Failed to start tray: ${e.message}`);
+            }
+        }, 1500);
+
     } catch (e) {
         log(`❌ Failed to start tray: ${e.message}`);
     }

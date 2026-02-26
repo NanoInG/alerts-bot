@@ -103,7 +103,7 @@ export function getCountrySummary(alerts) {
     return {
         totalAlerts: alerts.length,
         oblastCount: alertedOblasts.size,
-        oblasts: [...alertedOblasts].slice(0, 8),
+        oblasts: [...alertedOblasts],
         hasMore: alertedOblasts.size > 8,
         threats: threatTypes
     };
