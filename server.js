@@ -11,6 +11,8 @@
 process.stdout.write('\x1b]2;Alerts Bot\x1b\x5c');
 
 import express from 'express';
+import http from 'http'; // 1. Import http
+import { Server } from 'socket.io'; // 1. Import socket.io
 import TelegramBot from 'node-telegram-bot-api';
 import path from 'path';
 import fs from 'fs';
@@ -36,8 +38,15 @@ import { buildAlertMessage } from './src/alert_generator.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// === Express App ===
+// === Express App & HTTP/Socket.io Server ===
 const app = express();
+const httpServer = http.createServer(app); // 2. Create standard HTTP server
+const io = new Server(httpServer, { // 3. Attach socket.io
+    cors: {
+        origin: "*", // Allow all origins for simplicity
+        methods: ["GET", "POST"]
+    }
+});
 app.use(express.json());
 
 // === Telegram Bot ===
@@ -138,7 +147,8 @@ app.get('/api/locations', (req, res) => {
         uid: l.uid,
         name: l.name,
         short: l.short,
-        type: l.type
+        type: l.type,
+        oblastUid: l.oblastUid || null
     })));
 });
 
@@ -739,6 +749,10 @@ async function broadcastToGroups() {
 
     if (broadcastState[targetUid] !== isActive) {
         broadcastState[targetUid] = isActive;
+        
+        // 4. Emit status update to all connected web clients
+        io.emit('status_update', { alert: isActive });
+        log(`📡 Emitted status via WebSocket: ${isActive ? 'ALERT' : 'SAFE'}`);
 
         // Generate message text using shared builder
         const text = await buildAlertMessage(targetUid, targetName, alerts);
@@ -810,53 +824,26 @@ async function broadcastToGroups() {
 setInterval(checkAlertsForSubscribers, 30000);
 setInterval(broadcastToGroups, 30000);
 
-// =====================
-// START TRAY INDICATOR
-// =====================
-import { spawn } from 'child_process';
+// 5. Handle WebSocket connections
+io.on('connection', (socket) => {
+    log(`🌿 New client connected to WebSocket: ${socket.id}`);
+    
+    socket.on('request_initial_status', async () => {
+        try {
+            const alerts = await fetchAlerts();
+            const targetUid = config.targetRegionUid || '24';
+            const isActive = isAlertActive(alerts, targetUid);
+            socket.emit('status_update', { alert: isActive });
+            log(`Sent initial status to ${socket.id}: ${isActive ? 'ALERT' : 'SAFE'}`);
+        } catch (e) {
+            log(`Error sending initial status: ${e.message}`);
+        }
+    });
 
-function startTrayIndicator() {
-    const scriptPath = path.join(__dirname, 'AlertFloat.ps1');
-
-    // Check if script exists
-    if (!fs.existsSync(scriptPath)) {
-        log(`⚠️ Tray script not found: ${scriptPath}`);
-        return;
-    }
-
-    try {
-        // Step 1: Kill any existing AlertFloat processes
-        const killer = spawn('powershell.exe', [
-            '-ExecutionPolicy', 'Bypass',
-            '-Command',
-            `Get-Process -Name "powershell","pwsh" -ErrorAction SilentlyContinue | ForEach-Object { try { $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)" -ErrorAction SilentlyContinue).CommandLine; if ($cmd -match "AlertFloat") { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } } catch {} }`
-        ], { shell: true, detached: true, stdio: 'ignore' });
-        killer.unref();
-        log(`🔪 Killing old AlertFloat instances...`);
-
-        // Step 2: Launch new instance after old one is dead
-        setTimeout(() => {
-            try {
-                const ps = spawn('powershell.exe', [
-                    '-ExecutionPolicy', 'Bypass',
-                    '-Command',
-                    `Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -File "${scriptPath}"' -WindowStyle Hidden`
-                ], {
-                    shell: true,
-                    detached: true,
-                    stdio: 'ignore'
-                });
-                ps.unref();
-                log(`🎯 Tray indicator launched`);
-            } catch (e) {
-                log(`❌ Failed to start tray: ${e.message}`);
-            }
-        }, 1500);
-
-    } catch (e) {
-        log(`❌ Failed to start tray: ${e.message}`);
-    }
-}
+    socket.on('disconnect', () => {
+        log(`Client disconnected: ${socket.id}`);
+    });
+});
 
 // =====================
 // RESTORE ACTIVE ALERTS ON RESTART
@@ -877,17 +864,63 @@ async function restoreActiveAlerts() {
 }
 
 // =====================
+// START TRAY INDICATOR (ELECTRON)
+// =====================
+import { spawn } from 'child_process';
+
+function startElectronIndicator() {
+    const indicatorDir = path.join(__dirname, 'alert-indicator');
+    const electronExe = path.join(indicatorDir, 'node_modules', 'electron', 'dist', 'electron.exe');
+
+    if (!fs.existsSync(electronExe)) {
+        log(`⚠️ Electron binary not found: ${electronExe}`);
+        return;
+    }
+
+    try {
+        // Use taskkill instead of PowerShell for speed (filtering by window title)
+        // Note: Title filter usually works well in Windows for GUI apps
+        const killerCmd = `taskkill /F /FI "IMAGENAME eq electron.exe" /FI "WINDOWTITLE eq Alert Indicator*" /T`;
+        spawn('cmd.exe', ['/c', killerCmd], { shell: true, detached: true, stdio: 'ignore' }).unref();
+        log(`🧨 Fast-killing old indicator...`);
+
+        // Snappier delay
+        setTimeout(() => {
+            try {
+                const env = { ...process.env };
+                delete env.ELECTRON_RUN_AS_NODE;
+
+                const child = spawn(electronExe, ['.'], {
+                    cwd: indicatorDir,
+                    detached: true,
+                    stdio: 'ignore',
+                    env,
+                });
+                child.unref();
+                log(`🎯 Electron Alert Indicator (Re)launched`);
+            } catch (e) {
+                log(`❌ Failed to spawn Electron: ${e.message}`);
+            }
+        }, 800);
+
+    } catch (e) {
+        log(`❌ Error in startElectronIndicator: ${e.message}`);
+    }
+}
+
+// =====================
 // START SERVER
 // =====================
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => { // 7. Use httpServer to listen
     log(`🚀 Server started on port ${PORT}`);
     log(`🤖 Bot ${disablePolling ? 'SEND-ONLY' : 'POLLING'}`);
     log(`📍 Target: ${config.targetRegion}`);
     log(`📡 Broadcast to ${broadcastChatIds.length} groups`);
+    log('🌿 WebSocket server is listening for indicator connections');
 
     // Restore alerts
     restoreActiveAlerts();
 
-    // Start tray indicator after server is ready
-    setTimeout(startTrayIndicator, 1000);
+    // Launch Electron alert indicator
+    startElectronIndicator(); 
 });

@@ -1,0 +1,15 @@
+{
+  "name": "alert-indicator",
+  "version": "2.0.0",
+  "description": "Air raid alert indicator — System tray + floating strip (Electron)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": ["alerts", "ukraine", "tray", "indicator"],
+  "author": "PavelShell",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^33.4.11"
+  }
+}
