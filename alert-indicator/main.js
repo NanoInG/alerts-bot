@@ -62,6 +62,19 @@ app.whenReady().then(async () => {
     doCheck();
     pollTimer = setInterval(doCheck, POLL_INTERVAL);
 
+    // 🌿 Shadow Wakeup: Примусово виводимо нитку на передній план кожні 5 сек 🚬
+    // Це шоб Пуск та інші системні вікна не закривали наше зілля.
+    setInterval(() => {
+        for (const strip of stripWindows) {
+            if (strip && !strip.isDestroyed() && config.FloatingVisible) {
+                // 'screen-saver' — це максимальний рівень, вище тільки небо... або синій екран 😎
+                strip.setAlwaysOnTop(true, 'screen-saver');
+                // Додатковий пінок, шоб вікно не втрачало фокус "поза фокусом"
+                strip.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+            }
+        }
+    }, 5000);
+
     // IPC handlers
     setupIPC();
 
@@ -424,12 +437,23 @@ function refreshStripPositions() {
         const strip = stripWindows[i];
         const display = displays[i];
         if (strip && !strip.isDestroyed()) {
-            strip.setBounds({
-                x: display.bounds.x,
-                y: display.bounds.y + display.bounds.height - 20,
-                width: display.bounds.width,
-                height: 20,
-            });
+            const newX = display.bounds.x;
+            const newY = display.bounds.y + display.bounds.height - 20;
+            const newW = display.bounds.width;
+            
+            const currentBounds = strip.getBounds();
+            // 🌿 Чек: якщо ми вже там, то не смикаємо Explorer даремно! 🚬
+            if (currentBounds.x !== newX || currentBounds.y !== newY || currentBounds.width !== newW) {
+                console.log(`[Strip] Позиція змінилась на моніторі ${i}, рухаємо... 🚢`);
+                strip.setBounds({
+                    x: newX,
+                    y: newY,
+                    width: newW,
+                    height: 20,
+                });
+                // Після руху — знову "on top"
+                strip.setAlwaysOnTop(true, 'screen-saver');
+            }
         }
     }
 }
