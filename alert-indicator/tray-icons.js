@@ -37,10 +37,11 @@ function createCircleIcon(hex) {
                 // Inside circle — anti-aliased edge
                 const edgeWidth = 1.0;
                 const alpha = dist > radius - edgeWidth ? Math.max(0, (radius - dist) / edgeWidth) * 255 : 255;
-                buffer[offset] = color.r;     // R
-                buffer[offset + 1] = color.g; // G
-                buffer[offset + 2] = color.b; // B
-                buffer[offset + 3] = Math.round(alpha); // A
+                const isWin = process.platform === 'win32';
+                buffer[offset] = isWin ? color.b : color.r;     // B (Win) or R (Mac/Lin)
+                buffer[offset + 1] = color.g;                   // G
+                buffer[offset + 2] = isWin ? color.r : color.b; // R (Win) or B (Mac/Lin)
+                buffer[offset + 3] = Math.round(alpha);         // A
             } else {
                 // Transparent
                 buffer[offset + 3] = 0;
