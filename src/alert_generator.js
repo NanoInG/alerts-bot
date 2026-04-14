@@ -85,9 +85,9 @@ export async function generateMessageText(targetUid, targetName, alerts) {
         text += `━━━━━━━━━━━━━━━\n`;
         text += `📍 <b>${targetName}</b>\n\n`;
 
-        text += `✅ <b>Можна виходити</b> 😊\n\n`;
-
         text += `<blockquote expandable>\n`;
+        
+        text += `✅ <b>Можна виходити</b> 😊\n\n`;
 
         if (weather) {
             text += `<b>🌤️ Погода в ${coords.city}:</b>\n`;

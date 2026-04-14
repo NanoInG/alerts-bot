@@ -254,7 +254,7 @@ app.post('/api/test/send', async (req, res) => {
             const imagePath = getRandomImage(isAlert);
 
             try {
-                await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
+                await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML', show_caption_above_media: true });
                 count++;
                 log(`Test sent to ${chatId}`);
             } catch (e) {
