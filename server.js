@@ -254,7 +254,7 @@ app.post('/api/test/send', async (req, res) => {
             const imagePath = getRandomImage(isAlert);
 
             try {
-                await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML', show_caption_above_media: true });
+                await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML', show_caption_above_media: true, has_spoiler: true });
                 count++;
                 log(`Test sent to ${chatId}`);
             } catch (e) {
@@ -708,7 +708,7 @@ async function checkAlertsForSubscribers() {
             const imagePath = getRandomImage(isActive);
 
             try {
-                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML', show_caption_above_media: true });
+                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML', show_caption_above_media: true, has_spoiler: true });
                 log(`Subscriber alert to ${chatId}: ${isActive ? 'START' : 'END'}`);
 
                 // Only track new alerts (not all-clear messages)
@@ -780,7 +780,7 @@ async function broadcastToGroups() {
             }
 
             try {
-                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML', show_caption_above_media: true });
+                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML', show_caption_above_media: true, has_spoiler: true });
                 log(`Broadcast to ${chatId}: ${isActive ? 'ALERT' : 'END'}`);
 
                 // Only track new alerts (not all-clear messages)
