@@ -47,6 +47,8 @@ export async function generateMessageText(targetUid, targetName, alerts) {
             text += `\n`;
         }
 
+        text += `<blockquote expandable>\n`;
+
         if (summary.raions.length > 0) {
             text += `<b>📌 Райони:</b> ${summary.raions.join(', ')}`;
             if (summary.hasMore) text += ` +ще`;
@@ -76,12 +78,16 @@ export async function generateMessageText(targetUid, targetName, alerts) {
 
         let rfInfoText = await getRfAlertsString();
         if (rfInfoText) text += `\n\n${rfInfoText}`;
+
+        text += `</blockquote>`;
     } else {
         text = `🟢 <b>Відбій тривоги</b>\n`;
         text += `━━━━━━━━━━━━━━━\n`;
         text += `📍 <b>${targetName}</b>\n\n`;
 
         text += `✅ <b>Можна виходити</b> 😊\n\n`;
+
+        text += `<blockquote expandable>\n`;
 
         if (weather) {
             text += `<b>🌤️ Погода в ${coords.city}:</b>\n`;
@@ -103,6 +109,8 @@ export async function generateMessageText(targetUid, targetName, alerts) {
         // server.js logic says: if (!isActive) { ... if (rfText) ... }
         let rfInfoText = await getRfAlertsString();
         if (rfInfoText) text += `\n\n${rfInfoText}`;
+
+        text += `</blockquote>`;
     }
 
     return text;

@@ -708,7 +708,7 @@ async function checkAlertsForSubscribers() {
             const imagePath = getRandomImage(isActive);
 
             try {
-                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
+                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML', show_caption_above_media: true });
                 log(`Subscriber alert to ${chatId}: ${isActive ? 'START' : 'END'}`);
 
                 // Only track new alerts (not all-clear messages)
@@ -780,7 +780,7 @@ async function broadcastToGroups() {
             }
 
             try {
-                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML' });
+                const sentMsg = await bot.sendPhoto(chatId, imagePath, { caption: text, parse_mode: 'HTML', show_caption_above_media: true });
                 log(`Broadcast to ${chatId}: ${isActive ? 'ALERT' : 'END'}`);
 
                 // Only track new alerts (not all-clear messages)
@@ -911,7 +911,7 @@ function startElectronIndicator() {
 // =====================
 // START SERVER
 // =====================
-httpServer.listen(PORT, () => { // 7. Use httpServer to listen
+httpServer.listen(PORT, '0.0.0.0', () => { // 7. Use httpServer to listen
     log(`🚀 Server started on port ${PORT}`);
     log(`🤖 Bot ${disablePolling ? 'SEND-ONLY' : 'POLLING'}`);
     log(`📍 Target: ${config.targetRegion}`);
@@ -921,6 +921,6 @@ httpServer.listen(PORT, () => { // 7. Use httpServer to listen
     // Restore alerts
     restoreActiveAlerts();
 
-    // Launch Electron alert indicator
-    startElectronIndicator(); 
-});
+    // Launch Electron alert indicator (DISABLED FOR DOCKER)
+    // startElectronIndicator();
+    });
